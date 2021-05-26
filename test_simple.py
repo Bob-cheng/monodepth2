@@ -51,6 +51,7 @@ def parse_args():
                         help='if set, predicts metric depth instead of disparity. (This only '
                              'makes sense for stereo-trained KITTI models).',
                         action='store_true')
+    parser.add_argument("--gpu", help="input visible gpu device", type=str, required=True)
 
     return parser.parse_args()
 
@@ -60,6 +61,7 @@ def test_simple(args):
     """
     assert args.model_name is not None, \
         "You must specify the --model_name parameter; see README.md for an example"
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     if torch.cuda.is_available() and not args.no_cuda:
         device = torch.device("cuda")
