@@ -59,8 +59,8 @@ class StyleLoss(nn.Module):
         # ********
         xc = torch.linspace(-1, 1, width).repeat(height, 1)
         yc = torch.linspace(-1, 1, height).view(-1, 1).repeat(1, width)
-        grid = torch.cat((xc.unsqueeze(2), yc.unsqueeze(2)), 2) 
-        grid = grid.unsqueeze_(0).to(config.device0)
+        grid = torch.cat((xc.unsqueeze(2), yc.unsqueeze(2)), 2)  # (w,h,2)
+        grid = grid.unsqueeze_(0).to(config.device0) # (1,w,h,2)
         mask_ = F.grid_sample(self.style_mask.unsqueeze(0), grid).squeeze(0)
         # ********       
         target_feature_3d = target_feature.squeeze(0).clone()
@@ -344,14 +344,20 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
                 # which do not support autogard in pytorch, so we compute it separately.
                 rl_score, part_grid = realistic_loss_grad(input_img, laplacian_m)
                 rl_score *= rl_weight
+                part_grid *= rl_weight
 
-                loss = style_score + content_score + tv_score + rl_score
+                loss = style_score + content_score + tv_score # + rl_score
 
+                loss.backward()
+                input_img.grad += part_grid
+                loss = loss + rl_score
+                
                 # Store the best result for outputing
                 if loss < best_loss:
                     # print(best_loss)
                     best_loss = loss
                     best_input = input_img.data.clone()
+                    
             else:
                 loss = style_score + content_score + tv_score
 
@@ -366,8 +372,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
                     # Store the best temp result to initialize second stage input
                     input_img.data = best_input
                     best_loss = 1e10
-
-            loss.backward()
+                loss.backward()
             
             # Gradient cliping deal with gradient exploding
             clip_grad_norm_(model.parameters(), 15.0)
