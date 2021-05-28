@@ -16,7 +16,7 @@ import argparse
 import config
 import utils
 from image_preprocess import prepare_dir, process_content_img, process_style_img, process_scene_img
-from image_preprocess import gen_content_path, src_content_path, gen_style_path, src_style_path
+from image_preprocess import gen_content_path
 
 sys.path.append('seg')
 from seg.segmentation import *
@@ -25,7 +25,7 @@ from merge_index import *
 
 
 if __name__ == '__main__':
-    
+    torch.manual_seed(17)
     #----------init------------
     ap = argparse.ArgumentParser()
 
@@ -67,14 +67,10 @@ if __name__ == '__main__':
     width_s, height_s = style_img_resize.size
     width_c, height_c = content_img_resize.size
     
-    style_img   = utils.image_to_tensor(style_img_resize)[:3,:,:].unsqueeze(0)
-    content_img = utils.image_to_tensor(content_img_resize)[:3,:,:].unsqueeze(0)
-    scene_img   = utils.image_to_tensor(scene_img_crop)[:3, :, :].unsqueeze(0) # 1*3*320*1024
-
-    style_img = style_img.to(device, torch.float)
-    content_img = content_img.to(device, torch.float)
-
-    
+    # 1*3*320*1024
+    style_img   = utils.image_to_tensor(style_img_resize)[:3,:,:].unsqueeze(0).to(device, torch.float)
+    content_img = utils.image_to_tensor(content_img_resize)[:3,:,:].unsqueeze(0).to(device, torch.float)
+    scene_img   = utils.image_to_tensor(scene_img_crop)[:3, :, :].unsqueeze(0).to(device, torch.float)
     
     # print('content_img size: ', content_img.size())
     # utils.show_pic(style_img, 'style image')
@@ -89,7 +85,7 @@ if __name__ == '__main__':
 
     cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(config.device0)
     cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(config.device0)
-    
+
     # Two different initialization ways
     input_img = torch.randn(1, 3, height_c, width_c).to(config.device0)
     # input_img = content_img.clone()

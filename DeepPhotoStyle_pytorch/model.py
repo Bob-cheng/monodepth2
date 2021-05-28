@@ -6,11 +6,15 @@ import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.autograd import Variable
 import torchvision.models as models
+from torchvision.transforms import transforms
 import copy
 
 import config
 import cv2
 import utils
+
+from image_preprocess import scene_size
+from depth_model import import_depth_model
 class ContentLoss(nn.Module):
 
     def __init__(self, target,):
@@ -89,7 +93,7 @@ class StyleLoss(nn.Module):
         mask = F.grid_sample(self.content_mask.unsqueeze(0), grid).squeeze(0)
         # ****
         #mask = self.content_mask.data.resize_(channel, height, width).clone()
-        input_feature_3d = input_feature.squeeze(0).clone()
+        input_feature_3d = input_feature.squeeze(0).clone() #TODO why do we need to clone() here? 
         size_of_mask = (channel, channel_f, height, width)
         input_feature_masked = torch.zeros(size_of_mask, dtype=torch.float32).to(config.device0)
         for i in range(channel):
@@ -286,8 +290,56 @@ def realistic_loss_grad(image, laplacian_m):
     return loss, 2.*gradient
 
 
-def attach_car_to_scene(scene_img, adv_car_img, car_mask_tensor):
-    pass
+def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask_tensor):
+    """
+    Attach the car image and adversarial car image to the given scene with random position. 
+    The scene could have multiple images (batch size > 1)
+    scene_img: B * C * H * W
+    car_img:   1 * C * H * W
+    car_mask:      1 * H * W
+    """
+    _, _, H, W = adv_car_img.size()
+    scale = 0.8
+    # TODO: do some transformation on the adv_car_img together with car_mask_tensor
+    trans_seq = transforms.Compose([
+        transforms.Resize([int(H * scale), int(W * scale)])
+        ])
+    adv_car_img_trans = trans_seq(adv_car_img)
+    car_img_trans = trans_seq(car_img)
+    car_mask_tensor_trans = trans_seq(car_mask_tensor)
+
+    # attach to scene randomly
+    adv_scene = scene_img.clone()
+    car_scene = scene_img.clone()
+    _, _, H_Car, W_Car = adv_car_img_trans.size()
+    B_Sce, _, H_Sce, W_Sce = adv_scene.size()
+    car_mask_tensor_4D = car_mask_tensor_trans.unsqueeze(0) # 1*1*H*W
+    scene_car_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
+    for idx_Bat in range(B_Sce):
+        bottom_height = 20
+        left = 300
+        h_index = H_Sce - H_Car - bottom_height
+        w_index = left
+        h_range = slice(h_index, h_index + H_Car)
+        w_range = slice(w_index, w_index + W_Car)
+        car_area_in_scene = adv_scene[idx_Bat, :, h_range, w_range]
+        # adv_scene[idx_Bat, :, h_index : h_index + H_Car, w_index : w_index + W_Car] = \
+        #     adv_car_img_trans * car_mask_tensor_4D + car_area_in_scene * (1- car_mask_tensor_4D)
+        # car_scene[idx_Bat, :, h_index : h_index + H_Car, w_index : w_index + W_Car] = \
+        #         car_img_trans * car_mask_tensor_4D + car_area_in_scene * (1 - car_mask_tensor_4D)
+        # scene_car_mask[idx_Bat, :, h_index : h_index + H_Car, w_index : w_index + W_Car] = \
+        #     car_mask_tensor_4D
+        adv_scene[idx_Bat, :, h_range, w_range] = \
+            adv_car_img_trans * car_mask_tensor_4D + car_area_in_scene * (1- car_mask_tensor_4D)
+        car_scene[idx_Bat, :, h_range, w_range] = \
+                car_img_trans * car_mask_tensor_4D + car_area_in_scene * (1 - car_mask_tensor_4D)
+        scene_car_mask[idx_Bat, :, h_range, w_range] = \
+            car_mask_tensor_4D
+        utils.save_pic(adv_scene[idx_Bat,:,:,:], f'attached_adv_scene_{idx_Bat}')
+        utils.save_pic(car_scene[idx_Bat,:,:,:], f'attached_car_scene_{idx_Bat}')
+        utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
+    return adv_scene, car_scene, scene_car_mask
+    
 
 
 def run_style_transfer(cnn, normalization_mean, normalization_std,
@@ -300,6 +352,15 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     print("Buliding the style transfer model..")
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
         normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
+    
+    if scene_size == (1024, 320):
+        depth_model_name = 'mono+stereo_1024x320'
+    else:
+        raise RuntimeError("scene size undefined!")
+    depth_model = import_depth_model(depth_model_name).to(config.device0).eval()
+    for param in depth_model.parameters():
+        param.requires_grad = False
+    
     optimizer = get_input_optimizer(input_img)
 
     print("Optimizing...")
@@ -345,6 +406,11 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
 
             # compose adversarial image
             adv_car_image = input_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
+            adv_scene, car_scene = attach_car_to_scene(scene_img, adv_car_image, content_img, car_mask_tensor)
+            adv_depth = depth_model(adv_scene)
+            car_depth = depth_model(car_scene)
+            scene_depth = depth_model(scene_img)
+            # TODO calculate loss function
 
             # Two stage optimaztion pipline    
             if run[0] > num_steps // 2:
@@ -386,7 +452,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
             clip_grad_norm_(model.parameters(), 15.0)
           
             run[0] += 1
-            if run[0] % 50 == 0:
+            if run[0] % 100 == 0:
                 print("run {}/{}:".format(run, num_steps))
         
                 print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f}'.format(
