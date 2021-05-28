@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "my_main.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/my_main.py",
+            "console": "integratedTerminal",
+            "args": ["-s", "Dirty_Back.png", "-c", "SUV_Back.png"],
+            "env": {"CUDA_VISIBLE_DEVICES": "7"}
+        },
+        {
+            "name": "main.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": ["-s", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/style/Dirty_Back.png", "-c", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/content/SUV_Back.png"],
+            "env": {"CUDA_VISIBLE_DEVICES": "7"}
+        }
+    ]
+}

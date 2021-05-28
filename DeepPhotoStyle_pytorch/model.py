@@ -286,8 +286,13 @@ def realistic_loss_grad(image, laplacian_m):
     return loss, 2.*gradient
 
 
+def attach_car_to_scene(scene_img, adv_car_img, car_mask_tensor):
+    pass
+
+
 def run_style_transfer(cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, style_mask, content_mask, laplacian_m,
+                       content_img, style_img, input_img, scene_img,
+                       style_mask, content_mask, car_mask_tensor, laplacian_m,
                        num_steps=3000,
                        style_weight=1000000, content_weight=100, tv_weight=0.0001, rl_weight=1):
 
@@ -336,7 +341,10 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
             
             style_score *= style_weight
             content_score *= content_weight
-            tv_score *= tv_weight    
+            tv_score *= tv_weight 
+
+            # compose adversarial image
+            adv_car_image = input_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
 
             # Two stage optimaztion pipline    
             if run[0] > num_steps // 2:
@@ -366,7 +374,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
                 if loss < best_loss and run[0] > 0:
                     # print(best_loss)
                     best_loss = loss
-                    best_input = input_img.data
+                    best_input = input_img.data.clone()
 
                 if run[0] == num_steps // 2:
                     # Store the best temp result to initialize second stage input
@@ -386,7 +394,9 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
 
                 print('Total Loss: ', loss.item())
               
-                saved_img = input_img.clone() 
+                saved_img = input_img.data.clone()
+                # add mask
+                saved_img = saved_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
                 saved_img.data.clamp_(0, 1)
                 utils.save_pic(saved_img, run[0])
             return loss
