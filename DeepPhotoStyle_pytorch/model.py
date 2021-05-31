@@ -374,11 +374,12 @@ def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filenam
     plt.imshow(diff_disp, cmap='magma'); plt.title('Disparity difference (scaled)'); plt.axis('off')
 
     plt.savefig('temp_' + filename + '.png')
+    plt.close()
 
 
 def run_style_transfer(cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, scene_img,
-                       style_mask, content_mask, car_mask_tensor, laplacian_m,
+                       content_img, style_img, input_img, scene_img, test_scene_img,
+                       style_mask, content_mask, car_mask, laplacian_m,
                        num_steps=3000,
                        style_weight=1000000, content_weight=100, tv_weight=0.0001, rl_weight=1):
 
@@ -439,7 +440,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
             content_score *= content_weight
             tv_score *= tv_weight 
 
-            adv_loss = get_adv_loss(input_img, content_img, scene_img, content_mask, car_mask_tensor, depth_model)
+            adv_loss = get_adv_loss(input_img, content_img, scene_img, content_mask, car_mask, depth_model)
             adv_weight = 1000000
             adv_loss *= adv_weight
 
@@ -481,7 +482,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
             clip_grad_norm_(model.parameters(), 15.0)
           
             run[0] += 1
-            if run[0] % 100 == 0:
+            if run[0] % 300 == 0:
                 print("run {}/{}:".format(run, num_steps))
         
                 print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f}'.format(
@@ -490,11 +491,12 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
                 print('Total Loss: ', loss.item())
               
                 saved_img = input_img.data.clone()
-                # add mask
+                # add mask and evluate
                 saved_img = saved_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
                 saved_img.data.clamp_(0, 1)
-                adv_scene_out, _, _ = attach_car_to_scene(scene_img, saved_img, content_img, car_mask_tensor)
-                utils.save_pic(adv_scene_out[[0]], run[0])
+                adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, content_img, car_mask)
+                # utils.save_pic(adv_scene_out[[0]], run[0])
+                eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
             return loss
 
         optimizer.step(closure)

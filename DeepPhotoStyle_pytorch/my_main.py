@@ -56,9 +56,12 @@ if __name__ == '__main__':
     width_s, height_s = style_img_resize.size
     width_c, height_c = content_img_resize.size
 
-    style_mask_tensor = torch.from_numpy(style_mask_np).unsqueeze(0).float().to(config.device0)
-    content_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0)
-    car_mask_tensor = torch.from_numpy(car_mask_np).unsqueeze(0).float().to(config.device0)
+    style_mask_tensor   = torch.from_numpy(style_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    content_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    car_mask_tensor     = torch.from_numpy(car_mask_np  ).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+
+    # test
+    # content_mask_tensor = car_mask_tensor
 
     # 1*3*320*1024
     style_img   = utils.image_to_tensor(style_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
@@ -88,8 +91,9 @@ if __name__ == '__main__':
     # input_img = content_img.clone()
 
     output, depth_model = run_style_transfer(cnn, cnn_normalization_mean, cnn_normalization_std,
-                                content_img, style_img, input_img, scene_img,
-                                style_mask_tensor, content_mask_tensor, car_mask_tensor, L)
+                                content_img, style_img, input_img, scene_img, test_scene_img,
+                                style_mask_tensor, content_mask_tensor, car_mask_tensor, L,
+                                num_steps=6000)
     print('Style transfer completed')
     utils.save_pic(output, 'deep_style_tranfer')
     print()
