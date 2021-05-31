@@ -33,7 +33,11 @@ def disp_to_depth(disp, min_depth, max_depth):
     depth = 1 / scaled_disp
     return scaled_disp, depth
 
-def import_depth_model(model_name):
+def import_depth_model(scene_size):
+    if scene_size == (1024, 320):
+        model_name = 'mono+stereo_1024x320'
+    else:
+        raise RuntimeError("scene size undefined!")
     model_path = os.path.join(depth_model_dir, model_name)
     print("-> Loading model from ", model_path)
     encoder_path = os.path.join(model_path, "encoder.pth")

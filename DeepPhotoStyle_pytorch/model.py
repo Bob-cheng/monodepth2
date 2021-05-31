@@ -387,11 +387,8 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
         normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
     
-    if scene_size == (1024, 320):
-        depth_model_name = 'mono+stereo_1024x320'
-    else:
-        raise RuntimeError("scene size undefined!")
-    depth_model = import_depth_model(depth_model_name).to(config.device0).eval()
+    # get deepth model
+    depth_model = import_depth_model(scene_size).to(config.device0).eval()
     for param in depth_model.parameters():
         param.requires_grad = False
     
@@ -506,13 +503,6 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     input_img.data = best_input
     input_img.data.clamp_(0, 1)
 
-    adv_car_output = best_adv_input * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
-    adv_scene_out, car_scene_out, _ = attach_car_to_scene(scene_img, adv_car_output, content_img, car_mask_tensor)
-    utils.save_pic(adv_scene_out, f'adv_scene_output')
-    utils.save_pic(car_scene_out, f'car_scene_output')
-    # take the first image without squeeze dimension
-    eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, 'depth_diff_result')
-
-    return input_img
+    return input_img, depth_model
 
 

@@ -99,5 +99,5 @@ if __name__ == '__main__':
     prepare_dir()
     process_style_img("Dirty_Back.png")
     process_content_img("SUV_Back.png")
-    process_scene_img("0000000017.png")
+    process_scene_img("0000000248.png")
 # %%
