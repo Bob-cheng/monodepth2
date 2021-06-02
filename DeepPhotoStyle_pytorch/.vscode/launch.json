@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/my_main.py",
             "console": "integratedTerminal",
-            "args": ["-s", "Dirty_Back.png", "-c", "SUV_Back.png"],
+            "args": ["-s", "Dirty_Back.png", "-c", "SUV_Back.png", "--steps", "6000"],
             "env": {"CUDA_VISIBLE_DEVICES": "7"}
         },
         {

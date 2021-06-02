@@ -1,4 +1,4 @@
-import sys
+import sys, socket
 
 import torch
 import torch.nn as nn
@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 
 import argparse
 
+from tensorboardX import SummaryWriter
+import datetime
 # ------custom module----
 import config
 import utils
@@ -34,11 +36,23 @@ if __name__ == '__main__':
 
     ap.add_argument("-c", "--content_image", required=True,
         help="name of the content image")
+    ap.add_argument("--gpu", type=str, help="specify a GPU to use")
+
+    ap.add_argument("--style-weight",   "-sw", default=1000000,  type=float, help="Style similarity weight")
+    ap.add_argument("--content-weight", "-cw", default=100,      type=float, help="Content similarity weight")
+    ap.add_argument("--tv-weight",      "-tw", default=0.0001,   type=float, help="Transform variant weight")
+    ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
+    ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
+    ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
 
     args = vars(ap.parse_args())
 
+    print(str(args))
+
     style_image_name = args["style_image"]
     content_image_name = args["content_image"]
+    if args['gpu'] != None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args['gpu']
 
 
     #-------------------------
@@ -52,6 +66,7 @@ if __name__ == '__main__':
     content_img_resize, car_mask_np, paint_mask_np = process_content_img(content_image_name)
     scene_img_crop = process_scene_img('0000000017.png')
     test_scene_img = process_scene_img('0000000248.png')
+
 
     width_s, height_s = style_img_resize.size
     width_c, height_c = content_img_resize.size
@@ -68,13 +83,25 @@ if __name__ == '__main__':
     content_img = utils.image_to_tensor(content_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
     scene_img   = utils.image_to_tensor(scene_img_crop)[:3, :, :].unsqueeze(0).to(config.device0, torch.float)
     test_scene_img = utils.image_to_tensor(test_scene_img)[:3, :, :].unsqueeze(0).to(config.device0, torch.float)
+
+    # Logger
+    log_dir = os.path.join(os.path.abspath(os.getcwd()), 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname())
+    os.makedirs(log_dir)
+    logger = SummaryWriter(log_dir)
+    logger.add_text('args/CLI_params', str(args), 0)
+
+    logger.add_image('input/style_image', style_img[0], 0)
+    logger.add_image('input/car_img', content_img[0], 0)
+    logger.add_image('input/style_mask', style_mask_tensor, 0)
+    logger.add_image('input/paint_mask', content_mask_tensor, 0)
+    logger.add_image('input/car_mask', car_mask_tensor, 0)
     
-    print('Save each mask as an image for debugging')
-    for i in range(style_mask_tensor.shape[0]):
-        utils.save_pic( torch.stack([style_mask_tensor[i, :, :], style_mask_tensor[i, :, :], style_mask_tensor[i, :, :]], dim=0), 
-                                    'style_mask_' + str(i) )
-        utils.save_pic( torch.stack([content_mask_tensor[i, :, :], content_mask_tensor[i, :, :], content_mask_tensor[i, :, :]], dim=0), 
-                                    'content_mask_' + str(i) )
+    # print('Save each mask as an image for debugging')
+    # for i in range(style_mask_tensor.shape[0]):
+    #     utils.save_pic( torch.stack([style_mask_tensor[i, :, :], style_mask_tensor[i, :, :], style_mask_tensor[i, :, :]], dim=0), 
+    #                                 'style_mask_' + str(i) )
+    #     utils.save_pic( torch.stack([content_mask_tensor[i, :, :], content_mask_tensor[i, :, :], content_mask_tensor[i, :, :]], dim=0), 
+    #                                 'content_mask_' + str(i) )
 
     # -------------------------
     # Eval() means change the model in eval mode and requires_grad = False means 
@@ -90,21 +117,26 @@ if __name__ == '__main__':
     input_img = torch.randn(1, 3, height_c, width_c).to(config.device0)
     # input_img = content_img.clone()
 
-    output, depth_model = run_style_transfer(cnn, cnn_normalization_mean, cnn_normalization_std,
+    output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, scene_img, test_scene_img,
                                 style_mask_tensor, content_mask_tensor, car_mask_tensor, L,
-                                num_steps=6000)
+                                args)
     print('Style transfer completed')
-    utils.save_pic(output, 'deep_style_tranfer')
+    # utils.save_pic(output, 'deep_style_tranfer')
+    logger.add_image('Output/whole_car_transfer', output[0], 0)
     print()
 
     # Evaluate with another new scene
     adv_car_output = output * content_mask_tensor.unsqueeze(0) + content_img * (1-content_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, content_img, car_mask_tensor)
-    utils.save_pic(adv_scene_out, f'adv_scene_output')
-    utils.save_pic(car_scene_out, f'car_scene_output')
+    # utils.save_pic(adv_scene_out, f'adv_scene_output')
+    # utils.save_pic(car_scene_out, f'car_scene_output')
+    logger.add_image('Output/Adv_scene', adv_scene_out[0], 0)
+    logger.add_image('Output/Car_scene', car_scene_out[0], 0)
+    logger.add_image('Output/Adv_car', adv_car_output[0], 0)
     # take the first image without squeeze dimension
-    eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, 'depth_diff_result')
+    eval_img = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, 'depth_diff_result')
+    logger.add_image('Output/Compare', utils.image_to_tensor(eval_img), 0)
 
     #--------------------------
     # print('Postprocessing......')
