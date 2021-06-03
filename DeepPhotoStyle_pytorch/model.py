@@ -265,9 +265,9 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     return model, style_losses, content_losses, tv_losses#, real_losses
 
 
-def get_input_optimizer(input_img):
+def get_input_optimizer(input_img, learning_rate):
     # this line to show that input is a parameter that requires a gradient
-    optimizer = optim.LBFGS([input_img.requires_grad_()])
+    optimizer = optim.LBFGS([input_img.requires_grad_()], lr=learning_rate)
     # optimizer = optim.Adam([input_img.requires_grad_()])
     return optimizer
 '''
@@ -294,9 +294,9 @@ def realistic_loss_grad(image, laplacian_m):
     gradient = torch.stack(grads, dim=0).unsqueeze(0)
     return loss, 2.*gradient
 
-def get_adv_loss(input_img, content_img, scene_img, content_mask, car_mask_tensor, depth_model):
+def get_adv_loss(input_img, content_img, scene_img, paint_mask, car_mask_tensor, depth_model):
     # compose adversarial image
-    adv_car_image = input_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
+    adv_car_image = input_img * paint_mask.unsqueeze(0) + content_img * (1-paint_mask.unsqueeze(0))
     adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, content_img, car_mask_tensor)
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
@@ -322,7 +322,7 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask):
     car_mask:      1 * H * W
     """
     _, _, H, W = adv_car_img.size()
-    scale = 0.8
+    scale = 0.7
     # TODO: do some transformation on the adv_car_img together with car_mask
     trans_seq = transforms.Compose([
         transforms.Resize([int(H * scale), int(W * scale)])
@@ -385,7 +385,7 @@ def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filenam
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, scene_img, test_scene_img,
-                       style_mask, content_mask, car_mask, laplacian_m,
+                       style_mask, paint_mask, car_mask, laplacian_m,
                        args):
 
     """Run the style transfer."""
@@ -398,14 +398,14 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
     print("Buliding the style transfer model..")
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
-        normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
+        normalization_mean, normalization_std, style_img, content_img, style_mask, car_mask, laplacian_m)
     
     # get deepth model
     depth_model = import_depth_model(scene_size).to(config.device0).eval()
     for param in depth_model.parameters():
         param.requires_grad = False
     
-    optimizer = get_input_optimizer(input_img)
+    optimizer = get_input_optimizer(input_img, args["learning_rate"])
 
     print("Optimizing...")
     print('*'*20)
@@ -452,24 +452,29 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             content_score *= content_weight
             tv_score *= tv_weight 
 
-            adv_loss = get_adv_loss(input_img, content_img, scene_img, content_mask, car_mask, depth_model)
+            adv_loss = get_adv_loss(input_img, content_img, scene_img, paint_mask, car_mask, depth_model)
             # adv_weight = 1000000
             adv_loss *= adv_weight
+
+            manual_grad = False
 
             # Two stage optimaztion pipline    
             if run[0] > num_steps // 2:
             # if False:
                 # Realistic loss relate sparse matrix computing, 
                 # which do not support autogard in pytorch, so we compute it separately.
+
                 rl_score, part_grid = realistic_loss_grad(input_img, laplacian_m)
                 rl_score *= rl_weight
                 part_grid *= rl_weight
-
-                loss = style_score + content_score + tv_score + adv_loss # + rl_score
-
-                loss.backward()
-                input_img.grad += part_grid
-                loss = loss + rl_score
+                if manual_grad:
+                    loss = style_score + content_score + tv_score + adv_loss # + rl_score
+                    loss.backward()
+                    input_img.grad += part_grid
+                    loss = loss + rl_score
+                else:
+                    loss = style_score + content_score + tv_score + adv_loss + rl_score
+                    loss.backward()
                     
             else:
                 loss = style_score + content_score + tv_score + adv_loss
@@ -512,7 +517,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 if run[0] % 300 == 0:
                     saved_img = input_img.data.clone()
                     # add mask and evluate
-                    saved_img = saved_img * content_mask.unsqueeze(0) + content_img * (1-content_mask.unsqueeze(0))
+                    saved_img = saved_img * paint_mask.unsqueeze(0) + content_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
                     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, content_img, car_mask)
                     # utils.save_pic(adv_scene_out[[0]], run[0])

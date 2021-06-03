@@ -44,6 +44,7 @@ if __name__ == '__main__':
     ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
     ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
     ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
+    ap.add_argument("--learning-rate", "-lr", default=1, type=float, help="leanring rate")
 
     args = vars(ap.parse_args())
 
@@ -56,24 +57,25 @@ if __name__ == '__main__':
 
 
     #-------------------------
-    print('Computing Laplacian matrix of content image')
-    content_image_path = os.path.join(gen_content_path, content_image_name)
-    L = utils.compute_lap(content_image_path)
-    print()
-    
     prepare_dir()
     style_img_resize, style_mask_np = process_style_img(style_image_name)
     content_img_resize, car_mask_np, paint_mask_np = process_content_img(content_image_name)
     scene_img_crop = process_scene_img('0000000017.png')
     test_scene_img = process_scene_img('0000000248.png')
 
+    print('Computing Laplacian matrix of content image')
+    content_image_path = os.path.join(gen_content_path, content_image_name)
+    L = utils.compute_lap(content_image_path)
+    print()
+
 
     width_s, height_s = style_img_resize.size
     width_c, height_c = content_img_resize.size
 
     style_mask_tensor   = torch.from_numpy(style_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
-    content_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     car_mask_tensor     = torch.from_numpy(car_mask_np  ).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    paint_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    content_mask_tensor = car_mask_tensor
 
     # test
     # content_mask_tensor = car_mask_tensor
@@ -93,7 +95,7 @@ if __name__ == '__main__':
     logger.add_image('input/style_image', style_img[0], 0)
     logger.add_image('input/car_img', content_img[0], 0)
     logger.add_image('input/style_mask', style_mask_tensor, 0)
-    logger.add_image('input/paint_mask', content_mask_tensor, 0)
+    logger.add_image('input/paint_mask', paint_mask_tensor, 0)
     logger.add_image('input/car_mask', car_mask_tensor, 0)
     
     # print('Save each mask as an image for debugging')
@@ -119,7 +121,7 @@ if __name__ == '__main__':
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, scene_img, test_scene_img,
-                                style_mask_tensor, content_mask_tensor, car_mask_tensor, L,
+                                style_mask_tensor, paint_mask_tensor, car_mask_tensor, L,
                                 args)
     print('Style transfer completed')
     # utils.save_pic(output, 'deep_style_tranfer')
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     print()
 
     # Evaluate with another new scene
-    adv_car_output = output * content_mask_tensor.unsqueeze(0) + content_img * (1-content_mask_tensor.unsqueeze(0))
+    adv_car_output = output * paint_mask_tensor.unsqueeze(0) + content_img * (1-paint_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, content_img, car_mask_tensor)
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
     # utils.save_pic(car_scene_out, f'car_scene_output')
