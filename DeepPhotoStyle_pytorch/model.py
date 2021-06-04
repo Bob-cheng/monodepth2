@@ -380,7 +380,7 @@ def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filenam
     # plt.savefig('temp_' + filename + '.png')
     pil_image = pil.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
     plt.close()
-    return pil_image
+    return pil_image, disp1, disp2
 
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
@@ -521,7 +521,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     saved_img.data.clamp_(0, 1)
                     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, content_img, car_mask)
                     # utils.save_pic(adv_scene_out[[0]], run[0])
-                    result_img = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
+                    result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])

@@ -137,7 +137,12 @@ if __name__ == '__main__':
     logger.add_image('Output/Car_scene', car_scene_out[0], 0)
     logger.add_image('Output/Adv_car', adv_car_output[0], 0)
     # take the first image without squeeze dimension
-    eval_img = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, 'depth_diff_result')
+    eval_img, car_scene_disp, adv_scene_disp = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, 'depth_diff_result')
+    scene_disp = depth_model(test_scene_img[[0]]).detach().cpu().squeeze().numpy() 
+    np.save(os.path.join(log_dir, 'eval_car_scene_disp.npy'), car_scene_disp)
+    np.save(os.path.join(log_dir, 'eval_adv_scene_disp.npy'), adv_scene_disp)
+    np.save(os.path.join(log_dir, 'eval_scene_disp.npy'), scene_disp)
+
     logger.add_image('Output/Compare', utils.image_to_tensor(eval_img), 0)
 
     #--------------------------
