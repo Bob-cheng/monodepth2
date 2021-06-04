@@ -132,7 +132,11 @@ if __name__ == '__main__':
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + content_img * (1-paint_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, content_img, car_mask_tensor)
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
-    # utils.save_pic(car_scene_out, f'car_scene_output')
+    
+    utils.save_pic(adv_scene_out, f'adv_scene_output', log_dir=log_dir)
+    utils.save_pic(car_scene_out, f'car_scene_output', log_dir=log_dir)
+    utils.save_pic(adv_car_output, f'adv_car_output', log_dir=log_dir)
+    
     logger.add_image('Output/Adv_scene', adv_scene_out[0], 0)
     logger.add_image('Output/Car_scene', car_scene_out[0], 0)
     logger.add_image('Output/Adv_car', adv_car_output[0], 0)

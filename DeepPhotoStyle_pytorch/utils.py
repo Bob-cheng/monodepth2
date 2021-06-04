@@ -1,4 +1,5 @@
 from PIL import Image
+import os
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 from matting import *
@@ -32,12 +33,16 @@ def show_pic(tensor, title=None):
     plt.imshow(image)
     plt.title(title)
 
-def save_pic(tensor, i):
+def save_pic(tensor, i, log_dir=''):
     unloader = transforms.ToPILImage() # tensor to PIL image
     image = tensor.cpu().clone()
     image = image.squeeze(0)
     image = unloader(image)
-    image.save("temp_result_{}.png".format(i), "PNG")
+    if log_dir != '':
+        file_path = os.path.join(log_dir, "{}.png".format(i))
+    else:
+        file_path = "{}.png".format(i)
+    image.save(file_path, "PNG")
 
 import torch
 
