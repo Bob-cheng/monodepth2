@@ -294,10 +294,11 @@ def realistic_loss_grad(image, laplacian_m):
     gradient = torch.stack(grads, dim=0).unsqueeze(0)
     return loss, 2.*gradient
 
-def get_adv_loss(input_img, content_img, scene_img, paint_mask, car_mask_tensor, depth_model):
+def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model):
     # compose adversarial image
-    adv_car_image = input_img * paint_mask.unsqueeze(0) + content_img * (1-paint_mask.unsqueeze(0))
-    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, content_img, car_mask_tensor)
+    input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
+    adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
+    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask)
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
@@ -384,8 +385,8 @@ def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filenam
 
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, scene_img, test_scene_img,
-                       style_mask, paint_mask, car_mask, laplacian_m,
+                       content_img, style_img, input_img, car_img, scene_img, test_scene_img,
+                       style_mask, content_mask, paint_mask, car_mask, laplacian_m,
                        args):
 
     """Run the style transfer."""
@@ -398,7 +399,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
     print("Buliding the style transfer model..")
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
-        normalization_mean, normalization_std, style_img, content_img, style_mask, car_mask, laplacian_m)
+        normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
     
     # get deepth model
     depth_model = import_depth_model(scene_size).to(config.device0).eval()
@@ -452,7 +453,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             content_score *= content_weight
             tv_score *= tv_weight 
 
-            adv_loss = get_adv_loss(input_img, content_img, scene_img, paint_mask, car_mask, depth_model)
+            adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model)
             # adv_weight = 1000000
             adv_loss *= adv_weight
 
@@ -515,11 +516,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 logger.add_scalar('Train/Total_loss', loss.item(), run[0])
 
                 if run[0] % 300 == 0:
-                    saved_img = input_img.data.clone()
+                    texture_img = utils.texture_to_car_size(input_img.data.clone(), car_img.size())
                     # add mask and evluate
-                    saved_img = saved_img * paint_mask.unsqueeze(0) + content_img * (1-paint_mask.unsqueeze(0))
+                    saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
-                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, content_img, car_mask)
+                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask)
                     # utils.save_pic(adv_scene_out[[0]], run[0])
                     result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])

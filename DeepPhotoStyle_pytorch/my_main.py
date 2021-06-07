@@ -17,7 +17,7 @@ import datetime
 # ------custom module----
 import config
 import utils
-from image_preprocess import prepare_dir, process_content_img, process_style_img, process_scene_img
+from image_preprocess import prepare_dir, process_content_img, process_style_img, process_scene_img, process_car_img
 from image_preprocess import gen_content_path
 
 sys.path.append('seg')
@@ -59,7 +59,10 @@ if __name__ == '__main__':
     #-------------------------
     prepare_dir()
     style_img_resize, style_mask_np = process_style_img(style_image_name)
-    content_img_resize, car_mask_np, paint_mask_np = process_content_img(content_image_name)
+    content_img_resize, content_mask_np = process_content_img(content_image_name)
+
+    # the following could be converted to data loader
+    car_img_resize, car_mask_np, paint_mask_np = process_car_img("Sedan_Back.png")
     scene_img_crop = process_scene_img('0000000017.png')
     test_scene_img = process_scene_img('0000000248.png')
 
@@ -75,7 +78,7 @@ if __name__ == '__main__':
     style_mask_tensor   = torch.from_numpy(style_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     car_mask_tensor     = torch.from_numpy(car_mask_np  ).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     paint_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
-    content_mask_tensor = car_mask_tensor
+    content_mask_tensor = torch.from_numpy(content_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
 
     # test
     # content_mask_tensor = car_mask_tensor
@@ -83,6 +86,7 @@ if __name__ == '__main__':
     # 1*3*320*1024
     style_img   = utils.image_to_tensor(style_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
     content_img = utils.image_to_tensor(content_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
+    car_img = utils.image_to_tensor(car_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
     scene_img   = utils.image_to_tensor(scene_img_crop)[:3, :, :].unsqueeze(0).to(config.device0, torch.float)
     test_scene_img = utils.image_to_tensor(test_scene_img)[:3, :, :].unsqueeze(0).to(config.device0, torch.float)
 
@@ -92,11 +96,13 @@ if __name__ == '__main__':
     logger = SummaryWriter(log_dir)
     logger.add_text('args/CLI_params', str(args), 0)
 
-    logger.add_image('input/style_image', style_img[0], 0)
-    logger.add_image('input/car_img', content_img[0], 0)
-    logger.add_image('input/style_mask', style_mask_tensor, 0)
-    logger.add_image('input/paint_mask', paint_mask_tensor, 0)
-    logger.add_image('input/car_mask', car_mask_tensor, 0)
+    logger.add_image('input/imgs/style_image',   style_img[0], 0)
+    logger.add_image('input/imgs/car_img',       car_img[0], 0)
+    logger.add_image('input/imgs/content_img',   content_img[0], 0)
+    logger.add_image('input/masks/style_mask',    style_mask_tensor, 0)
+    logger.add_image('input/masks/car_mask',      car_mask_tensor, 0)
+    logger.add_image('input/masks/paint_mask',    paint_mask_tensor, 0)
+    logger.add_image('input/masks/content_mask',  content_mask_tensor, 0)
     
     # print('Save each mask as an image for debugging')
     # for i in range(style_mask_tensor.shape[0]):
@@ -120,23 +126,24 @@ if __name__ == '__main__':
     # input_img = content_img.clone()
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
-                                content_img, style_img, input_img, scene_img, test_scene_img,
-                                style_mask_tensor, paint_mask_tensor, car_mask_tensor, L,
+                                content_img, style_img, input_img, car_img, scene_img, test_scene_img,
+                                style_mask_tensor, content_mask_tensor, paint_mask_tensor, car_mask_tensor, L,
                                 args)
     print('Style transfer completed')
     # utils.save_pic(output, 'deep_style_tranfer')
-    logger.add_image('Output/whole_car_transfer', output[0], 0)
+    logger.add_image('Output/whole_texture_transfer', output[0], 0)
     print()
 
     # Evaluate with another new scene
-    adv_car_output = output * paint_mask_tensor.unsqueeze(0) + content_img * (1-paint_mask_tensor.unsqueeze(0))
-    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, content_img, car_mask_tensor)
+    output = utils.texture_to_car_size(output, car_img.size())
+    adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
+    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor)
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
     
     utils.save_pic(adv_scene_out, f'adv_scene_output', log_dir=log_dir)
     utils.save_pic(car_scene_out, f'car_scene_output', log_dir=log_dir)
     utils.save_pic(adv_car_output, f'adv_car_output', log_dir=log_dir)
-    
+
     logger.add_image('Output/Adv_scene', adv_scene_out[0], 0)
     logger.add_image('Output/Car_scene', car_scene_out[0], 0)
     logger.add_image('Output/Adv_car', adv_car_output[0], 0)

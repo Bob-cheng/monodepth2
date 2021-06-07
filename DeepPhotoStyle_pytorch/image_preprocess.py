@@ -5,27 +5,28 @@ from PIL import ImageOps
 import numpy as np
 
 src_content_path = os.path.join(os.getcwd(), 'asset', 'src_img', 'content')
-src_style_path = os.path.join(os.getcwd(), 'asset', 'src_img', 'style')
-src_scene_path = os.path.join(os.getcwd(), 'asset', 'src_img', 'scene')
+src_style_path =   os.path.join(os.getcwd(), 'asset', 'src_img', 'style')
+src_scene_path =   os.path.join(os.getcwd(), 'asset', 'src_img', 'scene')
+src_car_path =     os.path.join(os.getcwd(), 'asset', 'src_img', 'car')
+
 gen_content_path = os.path.join(os.getcwd(), 'asset', 'gen_img', 'content')
-gen_style_path = os.path.join(os.getcwd(), 'asset', 'gen_img', 'style')
-gen_scene_path = os.path.join(os.getcwd(), 'asset', 'gen_img', 'scene')
+gen_style_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'style')
+gen_scene_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'scene')
+gen_car_path     = os.path.join(os.getcwd(), 'asset', 'gen_img', 'car')
 
 car_img_width = 300
 scene_size = (1024, 320) # width, height
 
 #%%
 def prepare_dir():
-    global src_content_path
-    global src_style_path
-    global gen_content_path
-    global gen_style_path
     if not os.path.exists(gen_content_path):
         os.makedirs(gen_content_path)
     if not os.path.exists(gen_style_path):
         os.makedirs(gen_style_path)
     if not os.path.exists(gen_scene_path):
         os.makedirs(gen_scene_path)
+    if not os.path.exists(gen_car_path):
+        os.makedirs(gen_car_path)
     
 def process_img(img_name, output_w, image_type: str):
     if image_type == 'style':
@@ -34,6 +35,9 @@ def process_img(img_name, output_w, image_type: str):
     elif image_type == 'content':
         img_path = os.path.join(src_content_path, img_name)
         img_out_path = os.path.join(gen_content_path, img_name)
+    elif image_type == 'car':
+        img_path = os.path.join(src_car_path, img_name)
+        img_out_path = os.path.join(gen_car_path, img_name)
     if not os.path.exists(img_path):
         raise RuntimeError("image '%s' doesn't exist" % img_path)
     style_img = pil.open(img_path)
@@ -53,6 +57,9 @@ def process_mask(mask_name, output_w, output_h, image_type: str):
     elif image_type == 'content':
         mask_path = os.path.join(src_content_path, mask_name)
         mask_out_path = os.path.join(gen_content_path, mask_name)
+    elif image_type == 'car':
+        mask_path = os.path.join(src_car_path, mask_name)
+        mask_out_path = os.path.join(gen_car_path, mask_name)
     if not os.path.exists(mask_path):
         img_mask_np = np.ones((output_h, output_w), dtype=int)
     else:
@@ -74,10 +81,18 @@ def process_style_img(img_name):
 def process_content_img(img_name):
     ext_split = os.path.splitext(img_name)
     content_img_resize, w, h = process_img(img_name, car_img_width, 'content')
-    car_mask_np = process_mask(ext_split[0] + '_CarMask' + ext_split[1], w, h, 'content')
-    paint_mask_np = process_mask(ext_split[0] + '_PaintMask' + ext_split[1], w, h, 'content')
-    assert content_img_resize.size[::-1] == car_mask_np.shape
-    return content_img_resize, car_mask_np, paint_mask_np
+    content_mask_np = process_mask(ext_split[0] + '_ContentMask' + ext_split[1], w, h, 'content')
+    assert content_img_resize.size[::-1] == content_mask_np.shape
+    return content_img_resize, content_mask_np
+
+def process_car_img(img_name):
+    ext_split = os.path.splitext(img_name)
+    car_img_resize, w, h = process_img(img_name, car_img_width, 'car')
+    car_mask_np = process_mask(ext_split[0] + '_CarMask' + ext_split[1], w, h, 'car')
+    paint_mask_np = process_mask(ext_split[0] + '_PaintMask' + ext_split[1], w, h, 'car')
+    assert car_img_resize.size[::-1] == car_mask_np.shape
+    return car_img_resize, car_mask_np, paint_mask_np
+
 
 def process_scene_img(img_name):
     scene_img = pil.open(os.path.join(src_scene_path, img_name))
@@ -98,6 +113,7 @@ def process_scene_img(img_name):
 if __name__ == '__main__':
     prepare_dir()
     process_style_img("Dirty_Back.png")
-    process_content_img("SUV_Back.png")
+    process_content_img("Warnning.png")
+    process_car_img("SUV_Back.png")
     process_scene_img("0000000248.png")
 # %%

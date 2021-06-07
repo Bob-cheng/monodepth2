@@ -10,8 +10,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/my_main.py",
             "console": "integratedTerminal",
-            "args": ["-s", "SUV_Back.png", "-c", "SUV_Back.png", "--steps", "6000", "-lr", "0.1", "-cw", "100", 
-                "-sw", "1000000", "-aw", "1000000"],
+            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "--steps", "6000", "-lr", "0.1", "-cw", "100", 
+                "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001"],
             "env": {"CUDA_VISIBLE_DEVICES": "2"}
         },
         {

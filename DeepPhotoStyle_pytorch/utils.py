@@ -18,6 +18,20 @@ def load_image(path, size):
 
     return image
 
+def texture_to_car_size(texture, car_size):
+    _, _, i_h, i_w = texture.size()
+    _, _, c_h, c_w = car_size
+    assert i_w == c_w
+    if c_h != i_h:
+        input_img_resize = transforms.Resize([c_h, c_w])(texture)
+        # if i_h > c_h:
+        #     input_img_resize = texture[:, :, i_h-c_h: i_h, :]
+        # else:
+        #     input_img_resize =
+    else:
+        input_img_resize = texture
+    return input_img_resize
+
 
 def image_to_tensor(img):
     transform_ = transforms.Compose([transforms.ToTensor()])
