@@ -294,18 +294,19 @@ def realistic_loss_grad(image, laplacian_m):
     gradient = torch.stack(grads, dim=0).unsqueeze(0)
     return loss, 2.*gradient
 
-def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model):
+def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, batch_size):
     # compose adversarial image
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
-    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask)
+    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
+    scene_depth_bs = torch.cat([scene_depth.clone()] * batch_size, dim=0)
 
     # calculate loss function
     loss_fun = torch.nn.MSELoss()
-    adv_scene_loss = loss_fun(adv_depth, scene_depth)
+    adv_scene_loss = loss_fun(adv_depth, scene_depth_bs)
     adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
     # adv_car_loss = -loss_fun(adv_depth, car_depth)
     w_scene = 1
@@ -314,7 +315,7 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     return adv_loss
 
 
-def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask):
+def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     """
     Attach the car image and adversarial car image to the given scene with random position. 
     The scene could have multiple images (batch size > 1)
@@ -323,29 +324,48 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask):
     car_mask:      1 * H * W
     """
     _, _, H, W = adv_car_img.size()
-    scale = 0.7
-    # TODO: do some transformation on the adv_car_img together with car_mask
-    trans_seq = transforms.Compose([
-        transforms.Resize([int(H * scale), int(W * scale)])
-        ])
-    adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
-    car_img_trans = trans_seq(car_img).squeeze(0)
-    car_mask_trans = trans_seq(car_mask)
-
-    # attach to scene randomly
-    adv_scene = scene_img.clone()
-    car_scene = scene_img.clone()
-    _, H_Car, W_Car = adv_car_img_trans.size()
-    B_Sce, _, H_Sce, W_Sce = adv_scene.size()
+    
+    adv_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
+    car_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
     scene_car_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
-    left_range = W_Sce - W_Car
+    
+    B_Sce, _, H_Sce, W_Sce = adv_scene.size()
+    
     for idx_Bat in range(B_Sce):
-        bottom_height = 20
+        scale = 0.7
+        # scale_upper = 0.8
+        # scale_lower = 0.6
+        # scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
+        # Do some transformation on the adv_car_img together with car_mask
+        trans_seq = transforms.Compose([ 
+            # transforms.RandomRotation(degrees=3),
+            transforms.Resize([int(H * scale), int(W * scale)])
+            ])
+        trans_seq_color = transforms.ColorJitter(brightness=0.3, contrast=0.2, saturation=0.2)
+
+        # adv_car_img_trans = trans_seq_color(trans_seq(adv_car_img)).squeeze(0)
+        # car_img_trans = trans_seq_color(trans_seq(car_img)).squeeze(0)
+
+        adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
+        car_img_trans = trans_seq(car_img).squeeze(0)
+        car_mask_trans = trans_seq(car_mask)
+
+        # paste it on the scene
+        _, H_Car, W_Car = adv_car_img_trans.size()
+        
+        left_range = W_Sce - W_Car
+        bottom_range = int((H_Sce - H_Car)/2)
+
+        bottom_height = 20 # random.randint(min(10, bottom_range), bottom_range)
         left = random.randint(50, left_range-50)
         h_index = H_Sce - H_Car - bottom_height
         w_index = left
         h_range = slice(h_index, h_index + H_Car)
         w_range = slice(w_index, w_index + W_Car)
+        # adv_car_img_trans = adv_car_img_set[idx_Bat]
+        # car_img_trans = car_img_set[idx_Bat]
+        # car_mask_trans = car_mask_set[idx_Bat]
+
         car_area_in_scene = adv_scene[idx_Bat, :, h_range, w_range]
         adv_scene[idx_Bat, :, h_range, w_range] = \
             adv_car_img_trans * car_mask_trans + car_area_in_scene * (1- car_mask_trans)
@@ -453,7 +473,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             content_score *= content_weight
             tv_score *= tv_weight 
 
-            adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model)
+            adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args["batch_size"])
             # adv_weight = 1000000
             adv_loss *= adv_weight
 
@@ -520,7 +540,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
-                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask)
+                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
                     result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])

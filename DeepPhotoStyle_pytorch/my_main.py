@@ -44,7 +44,8 @@ if __name__ == '__main__':
     ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
     ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
     ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
-    ap.add_argument("--learning-rate", "-lr", default=1, type=float, help="leanring rate")
+    ap.add_argument("--learning-rate",  "-lr", default=1, type=float, help="leanring rate")
+    ap.add_argument("--batch-size",     "-bs", default=1, type=int, help="optimization batch size")
 
     args = vars(ap.parse_args())
 
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     content_img_resize, content_mask_np = process_content_img(content_image_name)
 
     # the following could be converted to data loader
-    car_img_resize, car_mask_np, paint_mask_np = process_car_img("Sedan_Back.png")
+    car_img_resize, car_mask_np, paint_mask_np = process_car_img("SUV_Back.png")
     scene_img_crop = process_scene_img('0000000017.png')
     test_scene_img = process_scene_img('0000000248.png')
 
@@ -137,12 +138,12 @@ if __name__ == '__main__':
     # Evaluate with another new scene
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
-    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor)
+    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"])
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
     
-    utils.save_pic(adv_scene_out, f'adv_scene_output', log_dir=log_dir)
-    utils.save_pic(car_scene_out, f'car_scene_output', log_dir=log_dir)
-    utils.save_pic(adv_car_output, f'adv_car_output', log_dir=log_dir)
+    utils.save_pic(adv_scene_out[[0]], f'adv_scene_output', log_dir=log_dir)
+    utils.save_pic(car_scene_out[[0]], f'car_scene_output', log_dir=log_dir)
+    utils.save_pic(adv_car_output[[0]], f'adv_car_output', log_dir=log_dir)
 
     logger.add_image('Output/Adv_scene', adv_scene_out[0], 0)
     logger.add_image('Output/Car_scene', car_scene_out[0], 0)

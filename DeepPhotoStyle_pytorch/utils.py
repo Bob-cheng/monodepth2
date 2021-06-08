@@ -9,7 +9,6 @@ from wls_filter import wls_filter
 
 
 def load_image(path, size):
-
     image = Image.open(path)
     if size is None:
         pass
