@@ -332,22 +332,23 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
     
     for idx_Bat in range(B_Sce):
-        scale = 0.7
-        # scale_upper = 0.8
-        # scale_lower = 0.6
-        # scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
+        # scale = 0.7
+        scale_upper = 0.8
+        scale_lower = 0.6
+        scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
-            # transforms.RandomRotation(degrees=3),
+            transforms.RandomRotation(degrees=3),
             transforms.Resize([int(H * scale), int(W * scale)])
             ])
-        trans_seq_color = transforms.ColorJitter(brightness=0.3, contrast=0.2, saturation=0.2)
+        trans_seq_color = transforms.ColorJitter(brightness=0.3, contrast=0.1, saturation=0.1)
 
-        # adv_car_img_trans = trans_seq_color(trans_seq(adv_car_img)).squeeze(0)
-        # car_img_trans = trans_seq_color(trans_seq(car_img)).squeeze(0)
+        adv_car_img_trans = trans_seq_color(trans_seq(adv_car_img)).squeeze(0)
+        car_img_trans = trans_seq_color(trans_seq(car_img)).squeeze(0)
 
-        adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
-        car_img_trans = trans_seq(car_img).squeeze(0)
+        # adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
+        # car_img_trans = trans_seq(car_img).squeeze(0)
+        
         car_mask_trans = trans_seq(car_mask)
 
         # paste it on the scene
@@ -356,7 +357,7 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
         left_range = W_Sce - W_Car
         bottom_range = int((H_Sce - H_Car)/2)
 
-        bottom_height = 20 # random.randint(min(10, bottom_range), bottom_range)
+        bottom_height = int(bottom_range - scale * max(bottom_range - 10, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
         left = random.randint(50, left_range-50)
         h_index = H_Sce - H_Car - bottom_height
         w_index = left
@@ -547,6 +548,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])
                     logger.add_image('Train/Adv_car', saved_img[0], run[0])
+                    # logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0])
             return loss
 
         optimizer.step(closure)

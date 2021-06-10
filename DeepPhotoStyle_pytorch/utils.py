@@ -57,6 +57,41 @@ def save_pic(tensor, i, log_dir=''):
         file_path = "{}.png".format(i)
     image.save(file_path, "PNG")
 
+def extract_patch(adv_car, paint_mask):
+    _, _, H, W = adv_car.size()
+    paint_mask_2D = paint_mask.squeeze()
+    last_row = False
+    last_col = False
+    h_range = []
+    w_range = []
+    for i in range(H):
+        has_one = False
+        for j in range(W):
+            if abs(paint_mask_2D[i, j] - 1)  < 1e-10:
+                has_one = True
+                if not last_row:
+                    h_range.append(i)
+                    last_row = True
+                break
+        if not has_one and last_row:
+            h_range.append(i)
+            last_row = False
+    
+    for j in range(W):
+        has_one = False
+        for i in range(H):
+            if abs(paint_mask_2D[i, j] - 1)  < 1e-10:
+                has_one = True
+                if not last_col:
+                    w_range.append(j)
+                    last_col = True
+                break
+        if not has_one and last_col:
+            w_range.append(j)
+            last_col = False
+    
+    return adv_car[:, :, h_range[0] : h_range[1], w_range[0] : w_range[1]]
+
 import torch
 
 dtype = torch.cuda.FloatTensor

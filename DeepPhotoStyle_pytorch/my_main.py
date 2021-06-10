@@ -63,9 +63,9 @@ if __name__ == '__main__':
     content_img_resize, content_mask_np = process_content_img(content_image_name)
 
     # the following could be converted to data loader
-    car_img_resize, car_mask_np, paint_mask_np = process_car_img("SUV_Back.png")
-    scene_img_crop = process_scene_img('0000000017.png')
-    test_scene_img = process_scene_img('0000000248.png')
+    car_img_resize, car_mask_np, paint_mask_np = process_car_img("BMW.png")
+    scene_img_crop = process_scene_img('VW01.png')
+    test_scene_img = process_scene_img('VW01.png')
 
     print('Computing Laplacian matrix of content image')
     content_image_path = os.path.join(gen_content_path, content_image_name)
