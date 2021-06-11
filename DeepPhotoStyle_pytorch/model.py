@@ -18,6 +18,8 @@ import config
 import cv2
 import utils
 
+from lr_decay import PolynomialLRDecay
+
 from image_preprocess import scene_size
 from depth_model import import_depth_model
 class ContentLoss(nn.Module):
@@ -363,9 +365,6 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
         w_index = left
         h_range = slice(h_index, h_index + H_Car)
         w_range = slice(w_index, w_index + W_Car)
-        # adv_car_img_trans = adv_car_img_set[idx_Bat]
-        # car_img_trans = car_img_set[idx_Bat]
-        # car_mask_trans = car_mask_set[idx_Bat]
 
         car_area_in_scene = adv_scene[idx_Bat, :, h_range, w_range]
         adv_scene[idx_Bat, :, h_range, w_range] = \
@@ -417,6 +416,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     rl_weight = args['rl_weight']
     num_steps = args['steps']
     adv_weight = args['adv_weight']
+    learning_rate = args["learning_rate"]
 
     print("Buliding the style transfer model..")
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
@@ -427,7 +427,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     for param in depth_model.parameters():
         param.requires_grad = False
     
-    optimizer = get_input_optimizer(input_img, args["learning_rate"])
+    optimizer = get_input_optimizer(input_img, learning_rate)
+
+    LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
 
     print("Optimizing...")
     print('*'*20)
@@ -516,6 +518,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 # Store the best temp result to initialize second stage input
                 input_img.data = best_input
                 best_loss = 1e10
+                LR_decay.step(0)
             
             # Gradient cliping deal with gradient exploding
             clip_grad_norm_(model.parameters(), 15.0)
@@ -548,10 +551,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])
                     logger.add_image('Train/Adv_car', saved_img[0], run[0])
-                    # logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0])
+                    logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0], run[0])
             return loss
 
         optimizer.step(closure)
+        LR_decay.step()
               
     # a last corrention...
     input_img.data = best_input

@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "args": ["-s", "Warnning.png", "-c", "Warnning.png", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
                 "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
-            "env": {"CUDA_VISIBLE_DEVICES": "2"}
+            "env": {"CUDA_VISIBLE_DEVICES": "1"}
         },
         {
             "name": "main.py",
