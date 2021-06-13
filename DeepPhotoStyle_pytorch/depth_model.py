@@ -72,7 +72,7 @@ if __name__ == "__main__":
     import numpy as np
     from PIL import Image as pil
     from torchvision import transforms
-    depth_model = import_depth_model('mono+stereo_1024x320').to(torch.device("cuda")).eval()
+    depth_model = import_depth_model((1024, 320)).to(torch.device("cuda")).eval()
     img = pil.open('/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/scene/0000000017.png').convert('RGB')
     assert img.size == (1024, 320)
     img = transforms.ToTensor()(img).unsqueeze(0).to(torch.device("cuda"))

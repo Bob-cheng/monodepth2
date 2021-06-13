@@ -335,8 +335,8 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     
     for idx_Bat in range(B_Sce):
         # scale = 0.7
-        scale_upper = 0.8
-        scale_lower = 0.6
+        scale_upper = 0.7
+        scale_lower = 0.5
         scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
