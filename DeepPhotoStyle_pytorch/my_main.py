@@ -36,6 +36,8 @@ if __name__ == '__main__':
 
     ap.add_argument("-c", "--content_image", required=True,
         help="name of the content image")
+    ap.add_argument("-v", "--vehicle", required=True, type=str, help="The name of the vehicle image")
+    ap.add_argument("-pm", "--paint-mask", required=True, type=str, help="The number of the paint mask, e.g. '01'/'02'/'03' ")
     ap.add_argument("--gpu", type=str, help="specify a GPU to use")
 
     ap.add_argument("--style-weight",   "-sw", default=1000000,  type=float, help="Style similarity weight")
@@ -63,7 +65,7 @@ if __name__ == '__main__':
     content_img_resize, content_mask_np = process_content_img(content_image_name)
 
     # the following could be converted to data loader
-    car_img_resize, car_mask_np, paint_mask_np = process_car_img("BMW.png")
+    car_img_resize, car_mask_np, paint_mask_np = process_car_img(args['vehicle'], paintMask_no=args['paint_mask'])
     scene_img_crop = process_scene_img('VW01.png')
     test_scene_img = process_scene_img('VW01.png')
 

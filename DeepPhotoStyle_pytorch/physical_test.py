@@ -57,8 +57,8 @@ depth_model = import_depth_model(scene_size).to(torch.device("cuda")).eval()
 #%%
 for param in depth_model.parameters():
     param.requires_grad = False
-img1_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/physical_test/S1_C2_P1.jpg"
-img2_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/physical_test/S1_C2_P1_adv.jpg"
+img1_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/physical_test/S1_C1_P1.jpg"
+img2_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/physical_test/S1_C1_P1_adv.jpg"
 
 bottom_gap = 140
 

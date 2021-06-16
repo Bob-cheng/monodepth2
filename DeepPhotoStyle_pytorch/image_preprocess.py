@@ -14,7 +14,7 @@ gen_style_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'style')
 gen_scene_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'scene')
 gen_car_path     = os.path.join(os.getcwd(), 'asset', 'gen_img', 'car')
 
-car_img_width = 400
+car_img_width = 600
 scene_size = (1024, 320) # width, height
 
 #%%
@@ -62,6 +62,7 @@ def process_mask(mask_name, output_w, output_h, image_type: str):
         mask_out_path = os.path.join(gen_car_path, mask_name)
     if not os.path.exists(mask_path):
         img_mask_np = np.ones((output_h, output_w), dtype=int)
+        print(f"The mask [{mask_name}] doesn't exist, using the whole image...")
     else:
         img_mask = ImageOps.grayscale(pil.open(mask_path))
         img_mask_np = np.array(img_mask.resize((output_w, output_h)))/255.0
@@ -85,11 +86,12 @@ def process_content_img(img_name):
     assert content_img_resize.size[::-1] == content_mask_np.shape
     return content_img_resize, content_mask_np
 
-def process_car_img(img_name):
+def process_car_img(img_name, paintMask_no : str):
     ext_split = os.path.splitext(img_name)
     car_img_resize, w, h = process_img(img_name, car_img_width, 'car')
     car_mask_np = process_mask(ext_split[0] + '_CarMask' + ext_split[1], w, h, 'car')
-    paint_mask_np = process_mask(ext_split[0] + '_PaintMask' + ext_split[1], w, h, 'car')
+    paint_mask_np = process_mask(ext_split[0] + '_PaintMask' + paintMask_no + ext_split[1], w, h, 'car')
+    print(ext_split[0] + '_PaintMask' + paintMask_no + ext_split[1])
     assert car_img_resize.size[::-1] == car_mask_np.shape
     return car_img_resize, car_mask_np, paint_mask_np
 
@@ -114,6 +116,6 @@ if __name__ == '__main__':
     prepare_dir()
     process_style_img("Dirty_Back.png")
     process_content_img("Warnning.png")
-    process_car_img("SUV_Back.png")
+    process_car_img("SUV_Back.png", paintMask_no='01')
     process_scene_img("0000000248.png")
 # %%
