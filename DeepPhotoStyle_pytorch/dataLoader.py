@@ -249,7 +249,9 @@ class KittiLoader(Dataset):
         color_path, label = self.filepaths[idx]
         color = self.get_color(color_path)
         color = self.train_transform(color)
-        target = F.one_hot(torch.tensor([label]), num_classes=2)
+        # target = F.one_hot(torch.tensor(label,dtype=torch.int64), num_classes=2)
+        target = torch.tensor(label,dtype=torch.int64)
+        
         return color, target
 
         # if self.mode == 'train':
@@ -262,7 +264,7 @@ class KittiLoader(Dataset):
 
 if __name__ == "__main__":
     # seperate_sets('/data/cheng443/kitti/object/', 'trainval.txt')
-    readPathFiles('/data/cheng443/kitti/object/', 'vehicle_detection/training.txt')
+    # readPathFiles('/data/cheng443/kitti/object/', 'vehicle_detection/training.txt')
     kitti_loader_train = KittiLoader(mode='train')
     kitti_loader_eval = KittiLoader(mode='val')
     train_loader = DataLoader(kitti_loader_train, batch_size=3, shuffle=True, num_workers=10, pin_memory=True)

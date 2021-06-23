@@ -17,6 +17,24 @@
             "env": {"CUDA_VISIBLE_DEVICES": "1"}
         },
         {
+            "name": "cam_train.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cam_train.py",
+            "console": "integratedTerminal",
+            "args": ["-lr", "0.0001", "--epochs", "200", "-bs", "16"],
+            "env": {"CUDA_VISIBLE_DEVICES": "2"}
+        },
+        {
+            "name": "cam_extraction.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cam_extraction.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {"CUDA_VISIBLE_DEVICES": "2"}
+        },
+        {
             "name": "main.py",
             "type": "python",
             "request": "launch",
