@@ -10,10 +10,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/my_main.py",
             "console": "integratedTerminal",
-            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
-                "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
+            // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
+            //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "06", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
             //     "-sw", "0", "-aw", "1000", "-tw", "0", "-bs", "6"],
+            "args": ["-s", "BMW.png", "-c", "BMW.png", "-v", "BMW.png", "-pm", "07", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
+                "-sw", "0", "-aw", "1000", "-tw", "0", "-l1w", "10", "-bs", "6", "--l1-norm"],
             "env": {"CUDA_VISIBLE_DEVICES": "2"}
         },
         {

@@ -45,9 +45,11 @@ if __name__ == '__main__':
     ap.add_argument("--tv-weight",      "-tw", default=0.0001,   type=float, help="Transform variant weight")
     ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
     ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
+    ap.add_argument("--l1-weight", "-l1w", default=1, type=float, help="l1 loss weight for perterbation")
     ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
     ap.add_argument("--learning-rate",  "-lr", default=1, type=float, help="leanring rate")
     ap.add_argument("--batch-size",     "-bs", default=1, type=int, help="optimization batch size")
+    ap.add_argument("--l1-norm", dest='l1_norm', action='store_true', help="Wheather to use L1 Norm to find sensitive area")
 
     args = vars(ap.parse_args())
 
@@ -125,8 +127,11 @@ if __name__ == '__main__':
     cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(config.device0)
 
     # Two different initialization ways
-    input_img = torch.randn(1, 3, height_c, width_c).to(config.device0)
-    # input_img = content_img.clone()
+    if args['l1_norm']:
+        input_img = content_img.clone()
+    else:
+        input_img = torch.randn(1, 3, height_c, width_c).to(config.device0)
+    # 
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, car_img, scene_img, test_scene_img,
