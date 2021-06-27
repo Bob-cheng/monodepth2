@@ -487,6 +487,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     content_weight = args['content_weight']
     tv_weight = args['tv_weight']
     rl_weight = args['rl_weight']
+    l1_weight = args['l1_weight']
     num_steps = args['steps']
     adv_weight = args['adv_weight']
     learning_rate = args["learning_rate"]
@@ -529,54 +530,57 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             input_img.data.clamp_(0, 1)
             optimizer.zero_grad()
 
-            model(input_img)
+            style_score = torch.zeros(1)
+            content_score = torch.zeros(1)
+            tv_score = torch.zeros(1)
+            rl_score = torch.zeros(1)
+            l1_loss = torch.zeros(1)
+            adv_loss = torch.zeros(1)
 
-            style_score = 0
-            content_score = 0
-            tv_score = 0
-            
-            
-            for sl in style_losses:
-                style_score += sl.loss
+            if not args['l1_norm']:
+                model(input_img)
+                for sl in style_losses:
+                    style_score += sl.loss
 
-            for cl in content_losses:
-                content_score += cl.loss
+                for cl in content_losses:
+                    content_score += cl.loss
 
-            for tl in tv_losses:
-                tv_score += tl.loss
+                for tl in tv_losses:
+                    tv_score += tl.loss
             
             style_score *= style_weight
             content_score *= content_weight
             tv_score *= tv_weight 
 
-            adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args["batch_size"])
+            adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args)
             # adv_weight = 1000000
             adv_loss *= adv_weight
 
-            manual_grad = False
-
-            # Two stage optimaztion pipline    
-            if run[0] > num_steps // 2:
-            # if False:
-                # Realistic loss relate sparse matrix computing, 
-                # which do not support autogard in pytorch, so we compute it separately.
-
-                rl_score, part_grid = realistic_loss_grad(input_img, laplacian_m)
-                rl_score *= rl_weight
-                part_grid *= rl_weight
-                if manual_grad:
-                    loss = style_score + content_score + tv_score + adv_loss # + rl_score
-                    loss.backward()
-                    input_img.grad += part_grid
-                    loss = loss + rl_score
-                else:
-                    loss = style_score + content_score + tv_score + adv_loss + rl_score
-                    loss.backward()
-                    
-            else:
-                loss = style_score + content_score + tv_score + adv_loss
-                rl_score = torch.zeros(1) # Just to print
+            if args['l1_norm']:
+                l1_loss = get_lp_norm_loss(input_img, car_img, paint_mask)
+                l1_loss *= l1_weight
+                loss = l1_loss + adv_loss
                 loss.backward()
+            else:
+                manual_grad = False
+                # Two stage optimaztion pipline    
+                if run[0] > num_steps // 2:
+                    rl_score, part_grid = realistic_loss_grad(input_img, laplacian_m)
+                    rl_score *= rl_weight
+                    part_grid *= rl_weight
+                    if manual_grad:
+                        # Realistic loss relate sparse matrix computing, 
+                        # which do not support autogard in pytorch, so we compute it separately.
+                        loss = style_score + content_score + tv_score + adv_loss # + rl_score
+                        loss.backward()
+                        input_img.grad += part_grid
+                        loss = loss + rl_score
+                    else:
+                        loss = style_score + content_score + tv_score + adv_loss + rl_score
+                        loss.backward()
+                else:
+                    loss = style_score + content_score + tv_score + adv_loss
+                    loss.backward()
 
             if loss < best_loss and run[0] > 0:
                 # print(best_loss)
@@ -600,8 +604,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             if run[0] % 30 == 0:
                 print("run {}/{}:".format(run, num_steps))
         
-                print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f}'.format(
-                   style_score.item(), content_score.item(), tv_score.item(), rl_score.item(), adv_loss.item()))
+                print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f} l1_norm_loss: {:4f}'.format(
+                   style_score.item(), content_score.item(), tv_score.item(), rl_score.item(), adv_loss.item(), l1_loss.item()))
 
                 print('Total Loss: ', loss.item())
 
@@ -611,13 +615,18 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 logger.add_scalar('Train/Real_loss', rl_score.item(), run[0])
                 logger.add_scalar('Train/Adv_loss', adv_loss.item(), run[0])
                 logger.add_scalar('Train/Total_loss', loss.item(), run[0])
+                logger.add_scalar('Train/L1_norm_loss', l1_loss.item(), run[0])
 
                 if run[0] % 300 == 0:
                     texture_img = utils.texture_to_car_size(input_img.data.clone(), car_img.size())
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
-                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
+                    if args['l1_norm']:
+                        adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
+                        log_perterbation(logger, input_img, car_img, paint_mask, run[0])
+                    else:
+                        adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
                     result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
