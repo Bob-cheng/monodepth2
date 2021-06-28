@@ -308,7 +308,10 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
-    scene_depth_bs = torch.cat([scene_depth.clone()] * batch_size, dim=0)
+    if args['l1_norm']:
+        scene_depth_bs = scene_depth
+    else:
+        scene_depth_bs = torch.cat([scene_depth.clone()] * batch_size, dim=0)
 
     # calculate loss function
     loss_fun = torch.nn.MSELoss()
@@ -445,8 +448,9 @@ def log_perterbation(logger, input_img, car_img, paint_mask, step):
     assert input_img.size() == car_img.size()
     adv_car_image = input_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
     perterbation = adv_car_image - car_img
-    perterbation_sum = torch.sum(torch.abs(perterbation), dim=2, keepdim=True)
+    perterbation_sum = torch.sum(torch.abs(perterbation), dim=1, keepdim=True)
     perterbation_norm = perterbation_sum / torch.max(perterbation_sum)
+    # print(perterbation_norm.size())
     logger.add_image('Train/Perterbation', perterbation_norm[0], step)
 
 
