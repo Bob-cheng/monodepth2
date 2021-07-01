@@ -13,6 +13,10 @@ import matplotlib.pyplot as plt
 import random
 from tensorboardX import SummaryWriter
 from PIL import Image as pil
+import matplotlib as mpl
+import matplotlib.cm as cm
+
+
 
 import config
 import cv2
@@ -296,6 +300,19 @@ def realistic_loss_grad(image, laplacian_m):
     gradient = torch.stack(grads, dim=0).unsqueeze(0)
     return loss, 2.*gradient
 
+def get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, depth_model,  method='sum'):
+    # adv_car_image = input_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
+    adv_car_image = input_img
+    adv_scene, car_scene, scene_car_mask = attach_car_to_scene_fixed(scene_img, adv_car_image, car_img, car_mask)
+    adv_depth = depth_model(adv_scene)
+    masked_output = adv_depth * scene_car_mask
+    if method == 'sum':
+        score = torch.sum(masked_output)
+    elif method == 'mean':
+        score = torch.sum(masked_output) / torch.sum(scene_car_mask)
+    return score
+        
+
 def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args):
     batch_size = args["batch_size"]
     # compose adversarial image
@@ -453,6 +470,14 @@ def log_perterbation(logger, input_img, car_img, paint_mask, step):
     # print(perterbation_norm.size())
     logger.add_image('Train/Perterbation', perterbation_norm[0], step)
 
+def color_mapping(image, maptype='magma'):
+    image_np = image.squeeze().cpu().numpy()
+    vmax = np.percentile(image_np, 98)
+    normalizer = mpl.colors.Normalize(vmin=image_np.min(), vmax=vmax)
+    mapper = cm.ScalarMappable(norm=normalizer, cmap=maptype)
+    colormapped_im = (mapper.to_rgba(image_np)[:, :, :3] * 255).astype(np.uint8)
+    return colormapped_im
+
 
 
 def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filename):
@@ -480,6 +505,18 @@ def eval_depth_diff(img1: torch.tensor, img2: torch.tensor, depth_model, filenam
     plt.close()
     return pil_image, disp1, disp2
 
+def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
+    input_img_grad = paint_mask.unsqueeze(0) * input_img.grad
+    input_img_grad_l1 = torch.sum(torch.abs(input_img_grad), dim=1, keepdim=True)
+    # input_img_grad_l1 = input_img_grad_l1 / torch.max(input_img_grad_l1)
+    input_img_grad_l1 = input_img_grad_l1 / torch.quantile(input_img_grad_l1, 0.98)
+    input_img_grad_l1 = input_img_grad_l1.clamp(0, 1)
+    print(input_img_grad_l1.size())
+    colormap_im = color_mapping(input_img_grad_l1)
+    im = pil.fromarray(colormap_im)
+    im.save('/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/grad_vis.png')
+    # utils.save_pic(input_img_grad_l1, 'grad_vis', '/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/')
+    # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img, test_scene_img,
@@ -521,6 +558,12 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     best_adv_loss = 1e10
     best_input = input_img.data 
     best_adv_input = input_img.data 
+
+    # calculate output gradiant on input
+    optimizer.zero_grad()
+    output_car = get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, depth_model)
+    output_car.backward()
+    vis_input_grad(logger,paint_mask, input_img)
 
     while run[0] <= num_steps:
 

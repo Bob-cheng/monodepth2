@@ -76,6 +76,8 @@ def extract_patch(adv_car, paint_mask):
         if not has_one and last_row:
             h_range.append(i)
             last_row = False
+    if len(h_range) == 1:
+        h_range.append(H)
     
     for j in range(W):
         has_one = False
@@ -89,6 +91,8 @@ def extract_patch(adv_car, paint_mask):
         if not has_one and last_col:
             w_range.append(j)
             last_col = False
+    if len(w_range) == 1:
+        w_range.append(W)
     
     return adv_car[:, :, h_range[0] : h_range[1], w_range[0] : w_range[1]]
 
