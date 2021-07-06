@@ -1,5 +1,6 @@
 from PIL import Image
 import os
+import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 from matting import *
@@ -56,6 +57,19 @@ def save_pic(tensor, i, log_dir=''):
     else:
         file_path = "{}.png".format(i)
     image.save(file_path, "PNG")
+
+
+def from_mask_to_inf(mask: torch.Tensor):
+    epsilon = 1e-7
+    mask = mask + torch.distributions.Uniform(low=-epsilon, high=epsilon).sample(mask.shape).to(config.device0)
+    mask = torch.clip(mask, 0.0, 1.0)
+    mask = torch.arctanh((mask - 0.5) * (2 - epsilon))
+    return mask
+
+def from_inf_to_mask(values: torch.Tensor):
+    epsilon = 1e-7
+    mask = (torch.tanh(values) / (2 - epsilon) + 0.5)
+    return mask
 
 def extract_patch(adv_car, paint_mask):
     _, _, H, W = adv_car.size()

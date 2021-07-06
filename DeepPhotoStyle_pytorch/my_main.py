@@ -45,6 +45,7 @@ if __name__ == '__main__':
     ap.add_argument("--tv-weight",      "-tw", default=0.0001,   type=float, help="Transform variant weight")
     ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
     ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
+    ap.add_argument("--mask-weight", "-mw", default=1, type=float, help='weight for paint mask')
     ap.add_argument("--l1-weight", "-l1w", default=1, type=float, help="l1 loss weight for perterbation")
     ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
     ap.add_argument("--learning-rate",  "-lr", default=1, type=float, help="leanring rate")
@@ -84,6 +85,10 @@ if __name__ == '__main__':
     car_mask_tensor     = torch.from_numpy(car_mask_np  ).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     paint_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     content_mask_tensor = torch.from_numpy(content_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+
+    paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
+    paint_mask_inf = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
+    # paint_mask_inf = utils.from_mask_to_inf(paint_mask_tensor).detach().requires_grad_(True)
 
     # test
     # content_mask_tensor = car_mask_tensor
@@ -135,7 +140,7 @@ if __name__ == '__main__':
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, car_img, scene_img, test_scene_img,
-                                style_mask_tensor, content_mask_tensor, paint_mask_tensor, car_mask_tensor, L,
+                                style_mask_tensor, content_mask_tensor, paint_mask_inf, car_mask_tensor, L,
                                 args)
     print('Style transfer completed')
     # utils.save_pic(output, 'deep_style_tranfer')
