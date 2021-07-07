@@ -51,6 +51,7 @@ if __name__ == '__main__':
     ap.add_argument("--learning-rate",  "-lr", default=1, type=float, help="leanring rate")
     ap.add_argument("--batch-size",     "-bs", default=1, type=int, help="optimization batch size")
     ap.add_argument("--l1-norm", dest='l1_norm', action='store_true', help="Wheather to use L1 Norm to find sensitive area")
+    ap.add_argument("--random-scene", "-rs", action='store_true', help="Test whether we use different scene to train")
 
     args = vars(ap.parse_args())
 

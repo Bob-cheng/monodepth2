@@ -15,6 +15,7 @@ from tensorboardX import SummaryWriter
 from PIL import Image as pil
 import matplotlib as mpl
 import matplotlib.cm as cm
+from mwUpdater import MaskWeightUpdater
 
 
 
@@ -320,8 +321,8 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
     if args['l1_norm']:
-        adv_scene, car_scene, scene_car_mask = attach_car_to_scene_fixed(scene_img, adv_car_image, car_img, car_mask)
-        # adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
+        # adv_scene, car_scene, scene_car_mask = attach_car_to_scene_fixed(scene_img, adv_car_image, car_img, car_mask)
+        adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
     else:
         adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
     adv_depth = depth_model(adv_scene)
@@ -366,7 +367,7 @@ def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
     
     for idx_Bat in range(B_Sce):
-        scale = 0.4
+        scale = 0.7 # 600 -- 0.4, 300 -- 0.7
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
             transforms.Resize([int(H * scale), int(W * scale)])
@@ -422,9 +423,9 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
     
     for idx_Bat in range(B_Sce):
-        # scale = 0.7
-        scale_upper = 0.5
-        scale_lower = 0.3
+        # scale = 0.7 # 600 -- 0.4, 300 -- 0.7
+        scale_upper = 0.8
+        scale_lower = 0.6
         scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
@@ -474,11 +475,13 @@ def log_perterbation(logger, input_img, car_img, paint_mask, step):
     # print(perterbation_norm.size())
     logger.add_image('Train/Perterbation', perterbation_norm[0], step)
 
-def color_mapping(image, maptype='magma'):
+def color_mapping(image, maptype='magma', vmax=None, vmin=None):
     image_np = image.detach().squeeze().cpu().numpy()
     # vmax = np.percentile(image_np, 98)
-    vmax = image_np.max()
-    normalizer = mpl.colors.Normalize(vmin=image_np.min(), vmax=vmax)
+    vmax = image_np.max() if vmax == None else vmax
+    vmin = image_np.min() if vmin == None else vmin
+
+    normalizer = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
     mapper = cm.ScalarMappable(norm=normalizer, cmap=maptype)
     colormapped_im = (mapper.to_rgba(image_np)[:, :, :3] * 255).astype(np.uint8)
     return colormapped_im
@@ -536,6 +539,15 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     num_steps = args['steps']
     adv_weight = args['adv_weight']
     learning_rate = args["learning_rate"]
+
+    # mask weight multiplier:
+    mw_upscale = 1.2
+    mw_downscale = 0.5
+    mw_steps = 30
+    paint_mask = utils.from_inf_to_mask(paint_mask_inf)
+    mask_loss_thresh = torch.sum(torch.abs(paint_mask)).item()/4
+    mwUpdater = MaskWeightUpdater(mw_upscale, mw_downscale, mw_steps, mask_weight, mask_loss_thresh)
+
 
     print("Buliding the style transfer model..")
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
@@ -613,7 +625,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 l1_loss = get_lp_norm_loss(input_img, car_img, paint_mask)
                 l1_loss *= l1_weight
                 mask_loss = torch.sum(torch.abs(paint_mask))
-                mask_loss *= mask_weight
+                # mask_loss *= mask_weight
+                mw = mwUpdater.step(mask_loss)
+                mask_loss *= mw
                 loss = l1_loss + adv_loss + mask_loss
                 loss.backward()
             else:
@@ -672,7 +686,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 logger.add_scalar('Train/Total_loss', loss.item(), run[0])
                 logger.add_scalar('Train/L1_norm_loss', l1_loss.item(), run[0])
                 logger.add_scalar('Train/Mask_loss', mask_loss.item(), run[0])
-                logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask), -1, 0), run[0])
+                logger.add_scalar('Train/Mask_weight', mwUpdater.get_mask_weight(), run[0])
+                logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
 
 
                 if run[0] % 300 == 0:
@@ -681,8 +696,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
                     if args['l1_norm']:
-                        adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
-                        # adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
+                        # adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
+                        adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
                     else:
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])

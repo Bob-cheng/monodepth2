@@ -14,7 +14,7 @@ gen_style_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'style')
 gen_scene_path   = os.path.join(os.getcwd(), 'asset', 'gen_img', 'scene')
 gen_car_path     = os.path.join(os.getcwd(), 'asset', 'gen_img', 'car')
 
-car_img_width = 600
+car_img_width = 300
 scene_size = (1024, 320) # width, height
 
 #%%
