@@ -548,19 +548,16 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     learning_rate = args["learning_rate"]
 
     if args['random_scene']:
-        kitti_loader_train = KittiLoader(mode='train')
+        kitti_loader_train = KittiLoader(mode='train',  train_list='trainval.txt', val_list='val.txt')
         train_loader = DataLoader(kitti_loader_train, batch_size=args["batch_size"], shuffle=True, num_workers=3, pin_memory=True)
         scene_data_len = len(train_loader)
         train_loader_iter = iter(train_loader)
         print("Using random scene... Scene dataset size: ", scene_data_len)
 
     # mask weight multiplier:
-    mw_upscale = 1.2
-    mw_downscale = 0.5
-    mw_steps = 30
     paint_mask = utils.from_inf_to_mask(paint_mask_inf)
-    mask_loss_thresh = torch.sum(torch.abs(paint_mask)).item()/4
-    mwUpdater = MaskWeightUpdater(mw_upscale, mw_downscale, mw_steps, mask_weight, mask_loss_thresh)
+    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/8
+    mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
     print("Buliding the style transfer model..")
@@ -635,6 +632,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             if args['random_scene']:
                 try:
                     scene_img, _ = next(train_loader_iter)
+                    if scene_img.size()[0] != args['batch_size']:
+                        raise StopIteration
                 except StopIteration:
                     train_loader_iter = iter(train_loader)
                     scene_img, _ = next(train_loader_iter)

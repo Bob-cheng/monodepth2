@@ -81,7 +81,10 @@ def readPathFiles(root_dir, list_name):
         lines = f.readlines()
         for line in lines:
             items = line.split(' ')
-            filename_list.append((os.path.join(base_path, items[0]+'.png'), int(items[1])))
+            if len(items) == 2:
+                filename_list.append((os.path.join(base_path, items[0].rstrip()+'.png'), int(items[1])))
+            else:
+                filename_list.append((os.path.join(base_path, items[0].rstrip()+'.png'), 1))
     # print(filename_list)
     return filename_list
 
@@ -265,8 +268,8 @@ class KittiLoader(Dataset):
 if __name__ == "__main__":
     # seperate_sets('/data/cheng443/kitti/object/', 'trainval.txt')
     # readPathFiles('/data/cheng443/kitti/object/', 'vehicle_detection/training.txt')
-    kitti_loader_train = KittiLoader(mode='train')
-    kitti_loader_eval = KittiLoader(mode='val')
+    kitti_loader_train = KittiLoader(mode='train', train_list='trainval.txt', val_list='val.txt')
+    kitti_loader_eval = KittiLoader(mode='val', train_list='trainval.txt', val_list='val.txt')
     train_loader = DataLoader(kitti_loader_train, batch_size=3, shuffle=True, num_workers=10, pin_memory=True)
     test_loader = DataLoader(kitti_loader_eval, batch_size=3, shuffle=False, num_workers=10, pin_memory=True)
     for color, target in train_loader:
