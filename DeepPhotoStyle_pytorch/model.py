@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.autograd import Variable
+from torch.utils.data.dataloader import DataLoader
 import torchvision.models as models
 from torchvision.transforms import transforms
 import copy
@@ -16,6 +17,7 @@ from PIL import Image as pil
 import matplotlib as mpl
 import matplotlib.cm as cm
 from mwUpdater import MaskWeightUpdater
+from dataLoader import KittiLoader
 
 
 
@@ -335,9 +337,11 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
 
     # calculate loss function
     loss_fun = torch.nn.MSELoss()
-    adv_scene_loss = loss_fun(adv_depth, scene_depth_bs)
+
+    adv_scene_loss = loss_fun(adv_depth, (1 - scene_car_mask) * scene_depth_bs)
+    # adv_scene_loss = loss_fun(adv_depth, scene_depth_bs)
+
     adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
-    # adv_car_loss = -loss_fun(adv_depth, car_depth)
     w_scene = 1
     w_car = 1
     adv_loss = w_scene * adv_scene_loss + w_car * adv_car_loss
@@ -415,9 +419,12 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     car_mask:      1 * H * W
     """
     _, _, H, W = adv_car_img.size()
-    
-    adv_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
-    car_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
+    if scene_img.size()[0] == batch_size:
+        adv_scene = scene_img.clone()
+        car_scene = scene_img.clone()
+    else:
+        adv_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
+        car_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
     scene_car_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
     
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
@@ -525,7 +532,7 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, car_img, scene_img, test_scene_img,
+                       content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
                        style_mask, content_mask, paint_mask_inf, car_mask, laplacian_m,
                        args):
 
@@ -539,6 +546,13 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     num_steps = args['steps']
     adv_weight = args['adv_weight']
     learning_rate = args["learning_rate"]
+
+    if args['random_scene']:
+        kitti_loader_train = KittiLoader(mode='train')
+        train_loader = DataLoader(kitti_loader_train, batch_size=args["batch_size"], shuffle=True, num_workers=3, pin_memory=True)
+        scene_data_len = len(train_loader)
+        train_loader_iter = iter(train_loader)
+        print("Using random scene... Scene dataset size: ", scene_data_len)
 
     # mask weight multiplier:
     mw_upscale = 1.2
@@ -590,6 +604,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal best_input
             nonlocal best_adv_loss
             nonlocal best_adv_input
+            nonlocal train_loader_iter
 
             input_img.data.clamp_(0, 1)
             paint_mask = utils.from_inf_to_mask(paint_mask_inf)
@@ -616,6 +631,16 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             style_score *= style_weight
             content_score *= content_weight
             tv_score *= tv_weight 
+            
+            if args['random_scene']:
+                try:
+                    scene_img, _ = next(train_loader_iter)
+                except StopIteration:
+                    train_loader_iter = iter(train_loader)
+                    scene_img, _ = next(train_loader_iter)
+                scene_img = scene_img.to(config.device0)
+            else:
+                scene_img = scene_img_1
 
             adv_loss = get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args)
             # adv_weight = 1000000
@@ -695,6 +720,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
+                    if args['random_scene']:
+                        test_scene_img, _ = next(train_loader_iter)
+                        test_scene_img = test_scene_img.to(config.device0)
+                    else:
+                        test_scene_img = test_scene_img_1
                     if args['l1_norm']:
                         # adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
