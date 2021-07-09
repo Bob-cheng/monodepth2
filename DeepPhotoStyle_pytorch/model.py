@@ -532,7 +532,9 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
 def get_mask_loss(paint_mask):
-    return torch.sum(torch.abs(paint_mask) > 1e-2).float()
+    mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
+    # torch.sum(torch.abs(paint_mask) > 1e-2).float()
+    return torch.sum(torch.abs(mapped_mask))
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
