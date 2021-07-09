@@ -531,6 +531,9 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # utils.save_pic(input_img_grad_l1, 'grad_vis', '/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/')
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
+def get_mask_loss(paint_mask):
+    return torch.sum(torch.abs(paint_mask) > 1e-2).float()
+
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
                        style_mask, content_mask, paint_mask_inf, car_mask, laplacian_m,
@@ -648,7 +651,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             if args['l1_norm']:
                 l1_loss = get_lp_norm_loss(input_img, car_img, paint_mask)
                 l1_loss *= l1_weight
-                mask_loss = torch.sum(torch.abs(paint_mask))
+                mask_loss = get_mask_loss(paint_mask)
                 # mask_loss *= mask_weight
                 mw = mwUpdater.step(mask_loss)
                 mask_loss *= mw

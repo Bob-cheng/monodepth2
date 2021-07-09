@@ -17,12 +17,16 @@ class MaskWeightUpdater():
             #     self.mask_weight *= self.downscaler
             # else:
             #     self.mask_weight *= self.upscaler
-            if ref_value > self.maskloss_thresh * 1.5:
-                self.mask_weight = self.init_weight
-            elif ref_value < self.maskloss_thresh * 0.5:
-                self.mask_weight = -self.init_weight
-            else:
-                self.mask_weight = (ref_value - self.maskloss_thresh) / self.maskloss_thresh * 2 * self.init_weight
+
+            self.mask_weight = self.init_weight
+
+            ## try to fix the mask area to maskloss_thresh
+            # if ref_value > self.maskloss_thresh * 1.5:
+            #     self.mask_weight = self.init_weight
+            # elif ref_value < self.maskloss_thresh * 0.5:
+            #     self.mask_weight = -self.init_weight
+            # else:
+            #     self.mask_weight = (ref_value - self.maskloss_thresh) / self.maskloss_thresh * 2 * self.init_weight
                 
             
         return self.mask_weight
