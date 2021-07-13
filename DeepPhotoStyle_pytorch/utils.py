@@ -3,6 +3,7 @@ import os
 import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from torchvision.transforms.functional import InterpolationMode
 from matting import *
 import config
 import scipy.ndimage as spi
@@ -66,9 +67,11 @@ def from_mask_to_inf(mask: torch.Tensor):
     mask = torch.arctanh((mask - 0.5) * (2 - epsilon))
     return mask
 
-def from_inf_to_mask(values: torch.Tensor):
+def from_inf_to_mask(values: torch.Tensor, mask_size):
     epsilon = 1e-7
+    # values = transforms.Resize(mask_size[1:3])(values)
     mask = (torch.tanh(values) / (2 - epsilon) + 0.5)
+    mask = transforms.Resize(mask_size[1:3], InterpolationMode.NEAREST)(mask)
     return mask
 
 def extract_patch(adv_car, paint_mask):

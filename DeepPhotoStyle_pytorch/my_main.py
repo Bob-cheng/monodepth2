@@ -52,6 +52,7 @@ if __name__ == '__main__':
     ap.add_argument("--batch-size",     "-bs", default=1, type=int, help="optimization batch size")
     ap.add_argument("--l1-norm", dest='l1_norm', action='store_true', help="Wheather to use L1 Norm to find sensitive area")
     ap.add_argument("--random-scene", "-rs", action='store_true', help="Test whether we use different scene to train")
+    ap.add_argument("--mask-step", "-ms", default=1, type=int, help="minimum mask unite size for mask optimization")
 
     args = vars(ap.parse_args())
 
@@ -69,7 +70,7 @@ if __name__ == '__main__':
     content_img_resize, content_mask_np = process_content_img(content_image_name)
 
     # the following could be converted to data loader
-    car_img_resize, car_mask_np, paint_mask_np = process_car_img(args['vehicle'], paintMask_no=args['paint_mask'])
+    car_img_resize, car_mask_np, paint_mask_np = process_car_img(args['vehicle'], paintMask_no=args['paint_mask'], mask_step=args['mask_step'])
     scene_img_crop = process_scene_img('VW01.png')
     test_scene_img = process_scene_img('VW01.png')
 
@@ -149,6 +150,7 @@ if __name__ == '__main__':
     print()
 
     # Evaluate with another new scene
+    paint_mask_tensor = utils.from_inf_to_mask(paint_mask_inf, car_mask_tensor.size())
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"])

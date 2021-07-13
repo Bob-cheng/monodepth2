@@ -86,12 +86,14 @@ def process_content_img(img_name):
     assert content_img_resize.size[::-1] == content_mask_np.shape
     return content_img_resize, content_mask_np
 
-def process_car_img(img_name, paintMask_no : str):
+def process_car_img(img_name, paintMask_no : str, mask_step: int = 1):
     ext_split = os.path.splitext(img_name)
     car_img_resize, w, h = process_img(img_name, car_img_width, 'car')
     car_mask_np = process_mask(ext_split[0] + '_CarMask' + ext_split[1], w, h, 'car')
     if paintMask_no == '-1': # random mask
-        paint_mask_np = np.random.random(car_mask_np.shape)
+        mask_shape = [ (i // mask_step) for i in car_mask_np.shape ]
+        # paint_mask_np = np.random.random(mask_shape)
+        paint_mask_np = np.ones(mask_shape) * 0.5
         paint_mask_np =  np.clip(paint_mask_np, 0.0, 1.0)
     else:
         paint_mask_np = process_mask(ext_split[0] + '_PaintMask' + paintMask_no + ext_split[1], w, h, 'car')

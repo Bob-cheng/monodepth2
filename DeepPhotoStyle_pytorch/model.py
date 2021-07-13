@@ -534,7 +534,9 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
 def get_mask_loss(paint_mask):
     mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
     # torch.sum(torch.abs(paint_mask) > 1e-2).float()
-    return torch.sum(torch.abs(mapped_mask))
+    loss = torch.sum(torch.abs(mapped_mask))
+    # loss = torch.mean(torch.abs(mapped_mask))
+    return loss
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
@@ -557,10 +559,12 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         train_loader = DataLoader(kitti_loader_train, batch_size=args["batch_size"], shuffle=True, num_workers=3, pin_memory=True)
         scene_data_len = len(train_loader)
         train_loader_iter = iter(train_loader)
+        
         print("Using random scene... Scene dataset size: ", scene_data_len)
 
     # mask weight multiplier:
-    paint_mask = utils.from_inf_to_mask(paint_mask_inf)
+    paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+
     mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/8
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
@@ -609,7 +613,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal train_loader_iter
 
             input_img.data.clamp_(0, 1)
-            paint_mask = utils.from_inf_to_mask(paint_mask_inf)
+            paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
             optimizer.zero_grad()
 
             style_score = torch.zeros(1)
@@ -733,6 +737,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                         # adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
+                        logger.add_image('Train/Paint_mask_scaled', np.moveaxis(color_mapping(paint_mask, vmin=0), -1, 0), run[0])
                     else:
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
