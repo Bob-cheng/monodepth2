@@ -532,15 +532,15 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
 def get_mask_loss(paint_mask):
-    mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
-    # torch.sum(torch.abs(paint_mask) > 1e-2).float()
+    # mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
+    mapped_mask = paint_mask
     loss = torch.sum(torch.abs(mapped_mask))
     # loss = torch.mean(torch.abs(mapped_mask))
     return loss
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
-                       style_mask, content_mask, paint_mask_inf, car_mask, laplacian_m,
+                       style_mask, content_mask, paint_mask_boarders, car_mask, laplacian_m,
                        args):
 
     """Run the style transfer."""
@@ -563,7 +563,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         print("Using random scene... Scene dataset size: ", scene_data_len)
 
     # mask weight multiplier:
-    paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+    # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+    paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
 
     mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/8
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
@@ -579,7 +580,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         param.requires_grad = False
     
     # optimizer = get_input_optimizer(input_img, learning_rate)
-    optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
+    # optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
+    optimizer = get_input_optimizer([input_img, paint_mask_boarders], learning_rate)
 
     LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
 
@@ -613,7 +615,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal train_loader_iter
 
             input_img.data.clamp_(0, 1)
-            paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+            # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+            paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
             optimizer.zero_grad()
 
             style_score = torch.zeros(1)

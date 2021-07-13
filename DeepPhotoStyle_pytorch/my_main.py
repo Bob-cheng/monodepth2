@@ -92,6 +92,8 @@ if __name__ == '__main__':
     paint_mask_inf = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
     # paint_mask_inf = utils.from_mask_to_inf(paint_mask_tensor).detach().requires_grad_(True)
 
+    paint_mask_boarders = torch.tensor([0, car_mask_tensor.size()[2], 0, car_mask_tensor.size()[1]]).requires_grad_(True)
+
     # test
     # content_mask_tensor = car_mask_tensor
 
@@ -142,7 +144,7 @@ if __name__ == '__main__':
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, car_img, scene_img, test_scene_img,
-                                style_mask_tensor, content_mask_tensor, paint_mask_inf, car_mask_tensor, L,
+                                style_mask_tensor, content_mask_tensor, paint_mask_boarders, car_mask_tensor, L,
                                 args)
     print('Style transfer completed')
     # utils.save_pic(output, 'deep_style_tranfer')
@@ -150,7 +152,8 @@ if __name__ == '__main__':
     print()
 
     # Evaluate with another new scene
-    paint_mask_tensor = utils.from_inf_to_mask(paint_mask_inf, car_mask_tensor.size())
+    # paint_mask_tensor = utils.from_inf_to_mask(paint_mask_inf, car_mask_tensor.size())
+    paint_mask_tensor = utils.make_square_mask(car_mask_tensor.size(), paint_mask_boarders)
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"])
