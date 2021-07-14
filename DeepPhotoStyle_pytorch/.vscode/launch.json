@@ -12,9 +12,9 @@
             "console": "integratedTerminal",
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
             //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
-            "args": ["-s", "Black2.png", "-c", "Black2.png", "-v", "Black2.png", "-pm", "-1", "--mask-step", "4", "--steps", "3000", "-lr", "0.1", "-cw", "0", 
-                "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "0.0001", "-bs", "6", "--l1-norm", "--random-scene"],
-            "env": {"CUDA_VISIBLE_DEVICES": "5"}
+            "args": ["-s", "BMW.png", "-c", "BMW.png", "-v", "BMW.png", "-pm", "-1", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
+                "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "2e-5", "-bs", "6", "--l1-norm", "--random-scene"],
+            "env": {"CUDA_VISIBLE_DEVICES": "4"}
         },
         {
             "name": "cam_train.py",

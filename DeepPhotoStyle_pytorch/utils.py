@@ -182,13 +182,15 @@ def make_square_mask(mask_size, boarders):
     boarders: 0: left, 1: right, 2: top, 3: bottom
     mask_size: 0: channel, 1: height, 2: width
     """
-    x = torch.range(mask_size[1])
-    y = torch.range(mask_size[2])
+    x = torch.arange(0, mask_size[1])
+    y = torch.arange(0, mask_size[2])
     grid_x, grid_y = torch.meshgrid(x, y)
     grid_x.requires_grad = False
     grid_y.requires_grad = False
+    grid_x = grid_x.to(config.device0)
+    grid_y = grid_y.to(config.device0)
     l, r, t, b = boarders[0], boarders[1], boarders[2], boarders[3]
-    mask = 0.25 * (-torch.tanh(grid_x-l) * torch.tanh(grid_x-r) + 1) * (-torch.tanh(grid_y-t) * torch.tanh(grid_y-b) + 1)
+    mask = 0.25 * (-torch.tanh(grid_x-t) * torch.tanh(grid_x-b) + 1) * (-torch.tanh(grid_y-l) * torch.tanh(grid_y-r) + 1)
     mask = mask.clamp(0, 1).unsqueeze(0)
     return mask
 

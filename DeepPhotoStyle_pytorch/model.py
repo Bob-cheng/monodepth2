@@ -566,7 +566,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
     paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
 
-    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/8
+    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
@@ -598,6 +598,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     best_input = input_img.data 
     best_adv_input = input_img.data 
 
+    mask_loss = torch.zeros(1)
+
     # calculate output gradiant on input
     # optimizer.zero_grad()
     # output_car = get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, depth_model)
@@ -613,9 +615,15 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal best_adv_loss
             nonlocal best_adv_input
             nonlocal train_loader_iter
+            nonlocal paint_mask_boarders
+            nonlocal mask_loss
 
             input_img.data.clamp_(0, 1)
             # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+
+            # paint_mask_boarders[0:1].clamp_(0, car_mask.size()[2])
+            # paint_mask_boarders[2:3].clamp_(0, car_mask.size()[1])
+            # paint_mask_boarders.data += torch.normal(torch.zeros(4), torch.ones(4)*1).to(config.device0)
             paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
             optimizer.zero_grad()
 
@@ -754,7 +762,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
         optimizer.step(closure)
         LR_decay.step()
-              
+        if mask_loss.item() < mask_loss_thresh * mask_weight:
+            print("mask loss threshold reached!")
+            break
     # a last corrention...
     input_img.data = best_input
     input_img.data.clamp_(0, 1)
