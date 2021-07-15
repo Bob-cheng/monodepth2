@@ -37,7 +37,11 @@ if __name__ == '__main__':
     ap.add_argument("-c", "--content_image", required=True,
         help="name of the content image")
     ap.add_argument("-v", "--vehicle", required=True, type=str, help="The name of the vehicle image")
-    ap.add_argument("-pm", "--paint-mask", required=True, type=str, help="The number of the paint mask, e.g. '01'/'02'/'03' ")
+    ap.add_argument("-pm", "--paint-mask", required=True, type=str, 
+    help="""The types of the paint mask, e.g. '-1'/'01'/'02'/'03' 
+        -1: 0.5 initilization and mask optimization
+        -2: boarder mask optimization
+         """)
     ap.add_argument("--gpu", type=str, help="specify a GPU to use")
 
     ap.add_argument("--style-weight",   "-sw", default=1000000,  type=float, help="Style similarity weight")
@@ -85,15 +89,14 @@ if __name__ == '__main__':
 
     style_mask_tensor   = torch.from_numpy(style_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     car_mask_tensor     = torch.from_numpy(car_mask_np  ).unsqueeze(0).float().to(config.device0).requires_grad_(False)
-    paint_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
     content_mask_tensor = torch.from_numpy(content_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    # paint_mask_tensor = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    # paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
+    # paint_mask_inf = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
+    # paint_mask_boarders = torch.tensor([0, car_mask_tensor.size()[2], 0, car_mask_tensor.size()[1]]).float().to(config.device0).requires_grad_(True)
 
-    paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
-    paint_mask_inf = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
-    # paint_mask_inf = utils.from_mask_to_inf(paint_mask_tensor).detach().requires_grad_(True)
-
-    # test
-    # content_mask_tensor = car_mask_tensor
+    paint_mask_init = utils.get_mask_source(args['paint_mask'], car_mask_tensor.size(), paint_mask_np)
+    paint_mask_tensor = utils.get_mask_target(args['paint_mask'], car_mask_tensor.size(), paint_mask_init)
 
     # 1*3*320*1024
     style_img   = utils.image_to_tensor(style_img_resize)[:3,:,:].unsqueeze(0).to(config.device0, torch.float)
@@ -142,7 +145,7 @@ if __name__ == '__main__':
 
     output, depth_model = run_style_transfer(logger, cnn, cnn_normalization_mean, cnn_normalization_std,
                                 content_img, style_img, input_img, car_img, scene_img, test_scene_img,
-                                style_mask_tensor, content_mask_tensor, paint_mask_inf, car_mask_tensor, L,
+                                style_mask_tensor, content_mask_tensor, paint_mask_init, car_mask_tensor, L,
                                 args)
     print('Style transfer completed')
     # utils.save_pic(output, 'deep_style_tranfer')
@@ -150,7 +153,9 @@ if __name__ == '__main__':
     print()
 
     # Evaluate with another new scene
-    paint_mask_tensor = utils.from_inf_to_mask(paint_mask_inf, car_mask_tensor.size())
+    # paint_mask_tensor = utils.from_inf_to_mask(paint_mask_inf, car_mask_tensor.size())
+    # paint_mask_tensor = utils.make_square_mask(car_mask_tensor.size(), paint_mask_boarders)
+    paint_mask_tensor = utils.get_mask_target(args['paint_mask'], car_mask_tensor.size(), paint_mask_init)
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
     adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"])

@@ -177,6 +177,42 @@ def compute_lap(path_img):
     Ms = torch.sparse_coo_tensor(indices, values, shape, device=torch.device('cuda'))
     return Ms
 
+def make_square_mask(mask_size, boarders):
+    """
+    boarders: 0: left, 1: right, 2: top, 3: bottom
+    mask_size: 0: channel, 1: height, 2: width
+    """
+    x = torch.arange(0, mask_size[1])
+    y = torch.arange(0, mask_size[2])
+    grid_x, grid_y = torch.meshgrid(x, y)
+    grid_x.requires_grad = False
+    grid_y.requires_grad = False
+    grid_x = grid_x.to(config.device0)
+    grid_y = grid_y.to(config.device0)
+    l, r, t, b = boarders[0], boarders[1], boarders[2], boarders[3]
+    mask = 0.25 * (-torch.tanh(grid_x-t) * torch.tanh(grid_x-b) + 1) * (-torch.tanh(grid_y-l) * torch.tanh(grid_y-r) + 1)
+    mask = mask.clamp(0, 1).unsqueeze(0)
+    return mask
+
+def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
+    if mask_type == '-2':
+        paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]]).float().to(config.device0).requires_grad_(True)
+    elif mask_type == '-1':
+        paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
+        paint_mask_init = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
+    else:
+        paint_mask_init = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    return paint_mask_init
+
+def get_mask_target(mask_type, full_size, mask_source: torch.Tensor):
+    if mask_type == '-2':
+        paint_mask = make_square_mask(full_size, mask_source)
+    elif mask_type == '-1':
+        paint_mask = from_inf_to_mask(mask_source, full_size)
+    else:
+        paint_mask = mask_source
+    return paint_mask
+
 def post_process(tensor, origin_image_path):
     unloader = transforms.ToPILImage() # tensor to PIL image
     image = tensor.cpu().clone()

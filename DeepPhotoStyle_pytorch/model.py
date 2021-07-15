@@ -532,15 +532,15 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
 def get_mask_loss(paint_mask):
-    mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
-    # torch.sum(torch.abs(paint_mask) > 1e-2).float()
+    # mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
+    mapped_mask = paint_mask
     loss = torch.sum(torch.abs(mapped_mask))
     # loss = torch.mean(torch.abs(mapped_mask))
     return loss
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
-                       style_mask, content_mask, paint_mask_inf, car_mask, laplacian_m,
+                       style_mask, content_mask, paint_mask_init, car_mask, laplacian_m,
                        args):
 
     """Run the style transfer."""
@@ -563,9 +563,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         print("Using random scene... Scene dataset size: ", scene_data_len)
 
     # mask weight multiplier:
-    paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+    # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+    # paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
+    paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
 
-    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/8
+    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
@@ -579,7 +581,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         param.requires_grad = False
     
     # optimizer = get_input_optimizer(input_img, learning_rate)
-    optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
+    # optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
+    if args['paint_mask'] == '-1' or args['paint_mask'] == '-2':
+        optimizer = get_input_optimizer([input_img, paint_mask_init], learning_rate)
+    else:
+        optimizer = get_input_optimizer([input_img], learning_rate)
 
     LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
 
@@ -596,6 +602,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     best_input = input_img.data 
     best_adv_input = input_img.data 
 
+    mask_loss = torch.zeros(1)
+
     # calculate output gradiant on input
     # optimizer.zero_grad()
     # output_car = get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, depth_model)
@@ -611,9 +619,16 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal best_adv_loss
             nonlocal best_adv_input
             nonlocal train_loader_iter
+            nonlocal paint_mask_init
+            nonlocal mask_loss
 
             input_img.data.clamp_(0, 1)
-            paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+            # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
+
+            # paint_mask_boarders[0:1].clamp_(0, car_mask.size()[2])
+            # paint_mask_boarders[2:3].clamp_(0, car_mask.size()[1])
+            # paint_mask_boarders.data += torch.normal(torch.zeros(4), torch.ones(4)*1).to(config.device0)
+            paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
             optimizer.zero_grad()
 
             style_score = torch.zeros(1)
@@ -720,7 +735,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 logger.add_scalar('Train/L1_norm_loss', l1_loss.item(), run[0])
                 logger.add_scalar('Train/Mask_loss', mask_loss.item(), run[0])
                 logger.add_scalar('Train/Mask_weight', mwUpdater.get_mask_weight(), run[0])
-                logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
+                # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
 
 
                 if run[0] % 300 == 0:
@@ -737,7 +752,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                         # adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
-                        logger.add_image('Train/Paint_mask_scaled', np.moveaxis(color_mapping(paint_mask, vmin=0), -1, 0), run[0])
+                        logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
                     else:
                         adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
@@ -751,7 +766,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
         optimizer.step(closure)
         LR_decay.step()
-              
+        if args['l1_norm'] and args['paint_mask'] == '-2' and mask_loss.item() < mask_loss_thresh * mask_weight:
+            print("mask loss threshold reached!")
+            break
     # a last corrention...
     input_img.data = best_input
     input_img.data.clamp_(0, 1)
