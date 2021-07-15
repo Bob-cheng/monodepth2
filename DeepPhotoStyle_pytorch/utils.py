@@ -196,7 +196,7 @@ def make_square_mask(mask_size, boarders):
 
 def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
     if mask_type == '-2':
-        paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]]).float().to(config.device0).requires_grad_(True)
+        paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]-40]).float().to(config.device0).requires_grad_(True)
     elif mask_type == '-1':
         paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
         paint_mask_init = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
