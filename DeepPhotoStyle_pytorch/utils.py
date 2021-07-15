@@ -194,6 +194,25 @@ def make_square_mask(mask_size, boarders):
     mask = mask.clamp(0, 1).unsqueeze(0)
     return mask
 
+def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
+    if mask_type == '-2':
+        paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]]).float().to(config.device0).requires_grad_(True)
+    elif mask_type == '-1':
+        paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
+        paint_mask_init = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
+    else:
+        paint_mask_init = torch.from_numpy(paint_mask_np).unsqueeze(0).float().to(config.device0).requires_grad_(False)
+    return paint_mask_init
+
+def get_mask_target(mask_type, full_size, mask_source: torch.Tensor):
+    if mask_type == '-2':
+        paint_mask = make_square_mask(full_size, mask_source)
+    elif mask_type == '-1':
+        paint_mask = from_inf_to_mask(mask_source, full_size)
+    else:
+        paint_mask = mask_source
+    return paint_mask
+
 def post_process(tensor, origin_image_path):
     unloader = transforms.ToPILImage() # tensor to PIL image
     image = tensor.cpu().clone()
