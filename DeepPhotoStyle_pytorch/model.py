@@ -274,11 +274,14 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     return model, style_losses, content_losses, tv_losses#, real_losses
 
 
-def get_input_optimizer(params, learning_rate):
+def get_input_optimizer(params, learning_rate, args):
     # this line to show that input is a parameter that requires a gradient
     # optimizer = optim.LBFGS([param.requires_grad_() for param in params], lr=learning_rate)
     # optimizer = optim.Adam([input_img.requires_grad_()])
-    optimizer = optim.Adam([param.requires_grad_() for param in params], lr=learning_rate, betas=(0.5, 0.9))
+    if args['l1_norm']:
+        optimizer = optim.Adam([param.requires_grad_() for param in params], lr=learning_rate, betas=(0.5, 0.9))
+    else:
+        optimizer = optim.LBFGS([param.requires_grad_() for param in params], lr=learning_rate)
     return optimizer
 '''
 def manual_grad(image, laplacian_m):
@@ -322,18 +325,18 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     # compose adversarial image
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
-    if args['l1_norm']:
-        # adv_scene, car_scene, scene_car_mask = attach_car_to_scene_fixed(scene_img, adv_car_image, car_img, car_mask)
-        adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
-    else:
-        adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
+    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
-    if args['l1_norm']:
-        scene_depth_bs = scene_depth
-    else:
+    # if args['l1_norm']:
+    #     scene_depth_bs = scene_depth
+    # else:
+    #     scene_depth_bs = torch.cat([scene_depth.clone()] * batch_size, dim=0)
+    if scene_depth.size()[0] != batch_size:
         scene_depth_bs = torch.cat([scene_depth.clone()] * batch_size, dim=0)
+    else:
+        scene_depth_bs = scene_depth
 
     # calculate loss function
     loss_fun = torch.nn.MSELoss()
@@ -432,8 +435,8 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
     
     for idx_Bat in range(B_Sce):
         # scale = 0.7 # 600 -- 0.4, 300 -- 0.7
-        scale_upper = 0.8
-        scale_lower = 0.6
+        scale_upper = 0.5
+        scale_lower = 0.3
         scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
@@ -584,9 +587,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     # optimizer = get_input_optimizer(input_img, learning_rate)
     # optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
     if args['paint_mask'] == '-1' or args['paint_mask'] == '-2':
-        optimizer = get_input_optimizer([input_img, paint_mask_init], learning_rate)
+        optimizer = get_input_optimizer([input_img, paint_mask_init], learning_rate, args)
     else:
-        optimizer = get_input_optimizer([input_img], learning_rate)
+        optimizer = get_input_optimizer([input_img], learning_rate, args)
 
     LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
 
@@ -632,10 +635,10 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
             optimizer.zero_grad()
 
-            style_score = torch.zeros(1)
-            content_score = torch.zeros(1)
-            tv_score = torch.zeros(1)
-            rl_score = torch.zeros(1)
+            style_score = torch.zeros(1).float().to(config.device0)
+            content_score = torch.zeros(1).float().to(config.device0)
+            tv_score = torch.zeros(1).float().to(config.device0)
+            rl_score = torch.zeros(1).float().to(config.device0)
             l1_loss = torch.zeros(1)
             adv_loss = torch.zeros(1)
 
@@ -670,13 +673,13 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             # adv_weight = 1000000
             adv_loss *= adv_weight
 
+            mask_loss = get_mask_loss(paint_mask)
+            mw = mwUpdater.step(mask_loss)
+            mask_loss *= mw
+
             if args['l1_norm']:
                 l1_loss = get_lp_norm_loss(input_img, car_img, paint_mask)
                 l1_loss *= l1_weight
-                mask_loss = get_mask_loss(paint_mask)
-                # mask_loss *= mask_weight
-                mw = mwUpdater.step(mask_loss)
-                mask_loss *= mw
                 loss = l1_loss + adv_loss + mask_loss
                 loss.backward()
             else:
@@ -689,15 +692,15 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     if manual_grad:
                         # Realistic loss relate sparse matrix computing, 
                         # which do not support autogard in pytorch, so we compute it separately.
-                        loss = style_score + content_score + tv_score + adv_loss # + rl_score
+                        loss = style_score + content_score + tv_score + adv_loss + mask_loss# + rl_score
                         loss.backward()
                         input_img.grad += part_grid
                         loss = loss + rl_score
                     else:
-                        loss = style_score + content_score + tv_score + adv_loss + rl_score
+                        loss = style_score + content_score + tv_score + adv_loss + rl_score + mask_loss
                         loss.backward()
                 else:
-                    loss = style_score + content_score + tv_score + adv_loss
+                    loss = style_score + content_score + tv_score + adv_loss + mask_loss
                     loss.backward()
 
             if loss < best_loss and run[0] > 0:
@@ -750,24 +753,21 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     else:
                         test_scene_img = test_scene_img_1
                     if args['l1_norm']:
-                        # adv_scene_out, car_scene_out, _ = attach_car_to_scene_fixed(test_scene_img, saved_img, car_img, car_mask)
-                        adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
-                        # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
-                    else:
-                        adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
-                    # utils.save_pic(adv_scene_out[[0]], run[0])
+                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
                     result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])
                     logger.add_image('Train/Adv_car', saved_img[0], run[0])
-                    # logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0], run[0])
+                    logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0], run[0])
+                    # utils.save_pic(adv_scene_out[[0]], run[0])
+                    # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
             return loss
 
         optimizer.step(closure)
         LR_decay.step()
-        if args['l1_norm'] and args['paint_mask'] == '-2' and mask_loss.item() < mask_loss_thresh * mask_weight:
+        if args['paint_mask'] == '-2' and mask_loss.item() < mask_loss_thresh * mask_weight:
             print("mask loss threshold reached!")
             break
     # a last corrention...

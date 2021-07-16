@@ -137,7 +137,8 @@ if __name__ == '__main__':
     cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(config.device0)
 
     # Two different initialization ways
-    if args['l1_norm']:
+    # if args['l1_norm']:
+    if True:
         input_img = content_img.clone()
     else:
         input_img = torch.randn(1, 3, height_c, width_c).to(config.device0)

@@ -12,8 +12,10 @@
             "console": "integratedTerminal",
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
             //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
-            "args": ["-s", "BMW.png", "-c", "BMW.png", "-v", "BMW.png", "-pm", "-2", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
-                "-sw", "0", "-aw", "8000", "-tw", "0", "-l1w", "300", "-mw", "1e-3", "-bs", "6", "--l1-norm", "--random-scene"],
+            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "-2", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
+                "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6", "-mw", "2e-3"],
+            // "args": ["-s", "BMW.png", "-c", "BMW.png", "-v", "BMW.png", "-pm", "-2", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
+            //     "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "1e-3", "-bs", "6", "--l1-norm", "--random-scene"],
             "env": {"CUDA_VISIBLE_DEVICES": "7"}
 
         },
