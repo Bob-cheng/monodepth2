@@ -281,6 +281,7 @@ def get_input_optimizer(params, learning_rate, args):
     if args['l1_norm']:
         optimizer = optim.Adam([param.requires_grad_() for param in params], lr=learning_rate, betas=(0.5, 0.9))
     else:
+        # optimizer = optim.Adam([param.requires_grad_() for param in params], lr=learning_rate, betas=(0.5, 0.9))
         optimizer = optim.LBFGS([param.requires_grad_() for param in params], lr=learning_rate)
     return optimizer
 '''
@@ -538,8 +539,8 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
 def get_mask_loss(paint_mask):
     # mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
     mapped_mask = paint_mask
-    loss = torch.sum(torch.abs(mapped_mask))
-    # loss = torch.mean(torch.abs(mapped_mask))
+    # loss = torch.sum(torch.abs(mapped_mask))
+    loss = torch.mean(torch.abs(mapped_mask))
     return loss
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
@@ -571,7 +572,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     # paint_mask = utils.make_square_mask(car_mask.size(), paint_mask_boarders)
     paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
 
-    mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
+    # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
+    mask_loss_thresh = 1/16
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
@@ -722,7 +724,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             clip_grad_norm_(model.parameters(), 15.0)
           
             run[0] += 1
-            if run[0] % 30 == 0:
+            if run[0] % 30 == 0 or run[0] == 1:
                 print("run {}/{}:".format(run, num_steps))
         
                 print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f} l1_norm_loss: {:4f} mask_loss: {:4f}'.format(
@@ -739,10 +741,10 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 logger.add_scalar('Train/L1_norm_loss', l1_loss.item(), run[0])
                 logger.add_scalar('Train/Mask_loss', mask_loss.item(), run[0])
                 logger.add_scalar('Train/Mask_weight', mwUpdater.get_mask_weight(), run[0])
-                logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
+                # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
 
 
-                if run[0] % 300 == 0:
+                if run[0] % 300 == 0 or run[0] == 1:
                     texture_img = utils.texture_to_car_size(input_img.data.clone(), car_img.size())
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
@@ -762,14 +764,14 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     logger.add_image('Train/Adv_car', saved_img[0], run[0])
                     logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0], run[0])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
-                    # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
+                    logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
             return loss
 
         optimizer.step(closure)
         LR_decay.step()
-        if args['paint_mask'] == '-2' and mask_loss.item() < mask_loss_thresh * mask_weight:
-            print("mask loss threshold reached!")
-            break
+        # if args['paint_mask'] == '-2' and mask_loss.item() < mask_loss_thresh * mask_weight:
+        #     print("mask loss threshold reached!")
+        #     break
     # a last corrention...
     input_img.data = best_input
     input_img.data.clamp_(0, 1)

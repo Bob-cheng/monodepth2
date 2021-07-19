@@ -33,7 +33,11 @@ def disp_to_depth(disp, min_depth, max_depth):
     depth = 1 / scaled_disp
     return scaled_disp, depth
 
-def import_depth_model(scene_size):
+def import_depth_model(scene_size, model_type='monodepth2'):
+    """
+    import different depth model to attack:
+    possible choices: monodepth2, depthhints
+    """
     if scene_size == (1024, 320):
         model_name = 'mono+stereo_1024x320'
     else:
