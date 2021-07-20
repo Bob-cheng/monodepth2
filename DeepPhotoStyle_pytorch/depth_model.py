@@ -7,7 +7,8 @@ sys.path.append("..")
 # from .. import networks # for lint perpose
 import networks
 
-depth_model_dir = os.path.join(os.path.dirname(os.getcwd()), 'models')
+md2_model_dir = os.path.join(os.path.dirname(os.getcwd()), 'models')
+DH_model_dir = os.path.join(os.getcwd(), 'depth_networks', 'depth-hints', 'models')
 # print(depth_model_dir)
 
 class DepthModelWrapper(torch.nn.Module):
@@ -39,7 +40,14 @@ def import_depth_model(scene_size, model_type='monodepth2'):
     possible choices: monodepth2, depthhints
     """
     if scene_size == (1024, 320):
-        model_name = 'mono+stereo_1024x320'
+        if model_type == 'monodepth2':
+            model_name = 'mono+stereo_1024x320'
+            depth_model_dir = md2_model_dir
+        elif model_type == 'depthhints':
+            model_name = 'DH_MS_320_1024'
+            depth_model_dir = DH_model_dir
+        else:
+            raise RuntimeError("depth model unfound")
     else:
         raise RuntimeError("scene size undefined!")
     model_path = os.path.join(depth_model_dir, model_name)
@@ -76,7 +84,7 @@ if __name__ == "__main__":
     import numpy as np
     from PIL import Image as pil
     from torchvision import transforms
-    depth_model = import_depth_model((1024, 320)).to(torch.device("cuda")).eval()
+    depth_model = import_depth_model((1024, 320), 'depthhints').to(torch.device("cuda")).eval()
     img = pil.open('/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/scene/0000000017.png').convert('RGB')
     assert img.size == (1024, 320)
     img = transforms.ToTensor()(img).unsqueeze(0).to(torch.device("cuda"))

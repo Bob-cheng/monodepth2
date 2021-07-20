@@ -25,9 +25,16 @@ from seg.segmentation import *
 from model import *
 from merge_index import *
 
+def setup_seed(seed):
+     torch.manual_seed(seed)
+     torch.cuda.manual_seed_all(seed)
+     np.random.seed(seed)
+     random.seed(seed)
+     torch.backends.cudnn.deterministic = True
+
 
 if __name__ == '__main__':
-    torch.manual_seed(17)
+    
     #----------init------------
     ap = argparse.ArgumentParser()
 
@@ -57,10 +64,14 @@ if __name__ == '__main__':
     ap.add_argument("--l1-norm", dest='l1_norm', action='store_true', help="Wheather to use L1 Norm to find sensitive area")
     ap.add_argument("--random-scene", "-rs", action='store_true', help="Test whether we use different scene to train")
     ap.add_argument("--mask-step", "-ms", default=1, type=int, help="minimum mask unite size for mask optimization")
+    ap.add_argument("--depth-model", "-dm", type=str, default='monodepth2', choices=['monodepth2', 'depthhints'], help="select the depth model to be attacked")
+    ap.add_argument("--random-seed", '-seed', type=int, default=17, help="random seed in optimization")
 
     args = vars(ap.parse_args())
 
     print(str(args))
+
+    setup_seed(args['random_seed'])
 
     style_image_name = args["style_image"]
     content_image_name = args["content_image"]

@@ -345,6 +345,7 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     # adv_scene_loss = loss_fun(adv_depth, (1 - scene_car_mask) * scene_depth_bs)
     # adv_scene_loss = loss_fun(adv_depth, scene_depth_bs)
     adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
+    # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask), torch.zeros(1).float().to(config.device0))
 
     adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
     w_scene = 1
@@ -573,7 +574,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
 
     # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
-    mask_loss_thresh = 1/16
+    mask_loss_thresh = 1/8
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
@@ -582,7 +583,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
     
     # get deepth model
-    depth_model = import_depth_model(scene_size).to(config.device0).eval()
+    depth_model = import_depth_model(scene_size, model_type=args['depth_model']).to(config.device0).eval()
     for param in depth_model.parameters():
         param.requires_grad = False
     
@@ -714,11 +715,11 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 best_adv_loss = adv_loss
                 best_adv_input = input_img.data.clone()
 
-            if run[0] == num_steps // 2:
-                # Store the best temp result to initialize second stage input
-                input_img.data = best_input
-                best_loss = 1e10
-                LR_decay.step(0)
+            # if run[0] == num_steps // 2:
+            #     # Store the best temp result to initialize second stage input
+            #     input_img.data = best_input
+            #     best_loss = 1e10
+            #     LR_decay.step(0)
             
             # Gradient cliping deal with gradient exploding
             clip_grad_norm_(model.parameters(), 15.0)
