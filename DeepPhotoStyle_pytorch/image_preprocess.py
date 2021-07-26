@@ -123,6 +123,6 @@ if __name__ == '__main__':
     process_style_img("Dirty_Back.png")
     process_content_img("Warnning.png")
     process_car_img("Wall.png", paintMask_no='01')
-    process_scene_img("0000000248.png")
+    process_scene_img("0000000090.png")
     process_scene_img("000043.png")
 # %%

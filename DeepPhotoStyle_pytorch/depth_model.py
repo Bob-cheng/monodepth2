@@ -7,7 +7,7 @@ sys.path.append("..")
 # from .. import networks # for lint perpose
 import networks
 
-md2_model_dir = os.path.join(os.path.dirname(os.getcwd()), 'models')
+md2_model_dir = '/home/cheng443/projects/Monodepth/monodepth2_bob/models'
 DH_model_dir = os.path.join(os.getcwd(), 'depth_networks', 'depth-hints', 'models')
 # print(depth_model_dir)
 

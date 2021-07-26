@@ -1,0 +1,1 @@
+001: From: Jun13_12-47-22_trojai_half_600_dpi, No. 6600 epoch
