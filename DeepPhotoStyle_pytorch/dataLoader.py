@@ -6,7 +6,6 @@ import os
 import numpy as np
 import torch
 import random
-import config
 import torch.nn.functional as F
 import utils
 
@@ -268,6 +267,7 @@ class KittiLoader(Dataset):
 if __name__ == "__main__":
     # seperate_sets('/data/cheng443/kitti/object/', 'trainval.txt')
     # readPathFiles('/data/cheng443/kitti/object/', 'vehicle_detection/training.txt')
+    import config
     kitti_loader_train = KittiLoader(mode='train', train_list='trainval.txt', val_list='val.txt')
     kitti_loader_eval = KittiLoader(mode='val', train_list='trainval.txt', val_list='val.txt')
     train_loader = DataLoader(kitti_loader_train, batch_size=3, shuffle=True, num_workers=10, pin_memory=True)

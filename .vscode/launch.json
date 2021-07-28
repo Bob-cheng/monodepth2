@@ -5,14 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: open3d_test",
+            "name": "Open3d_test",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/Open3D_ML/open3d_visualization.py",
             "cwd": "${workspaceFolder}/Open3D_ML/",
             "justMyCode": false,
             "console": "integratedTerminal",
-            "env": {"CUDA_VISIBLE_DEVICES": "3"}
+            "env": {"CUDA_VISIBLE_DEVICES": "0"}
+        },
+        {
+            "name": "Attack Validator",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/pseudo_lidar/attack_validator.py",
+            "cwd": "${workspaceFolder}/",
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "env": {"CUDA_VISIBLE_DEVICES": "0"}
         }
     ]
 }
