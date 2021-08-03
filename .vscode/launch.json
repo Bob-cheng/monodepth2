@@ -12,7 +12,7 @@
             "cwd": "${workspaceFolder}/Open3D_ML/",
             "justMyCode": false,
             "console": "integratedTerminal",
-            "env": {"CUDA_VISIBLE_DEVICES": "0"}
+            "env": {"CUDA_VISIBLE_DEVICES": "3"}
         },
         {
             "name": "Attack Validator",
@@ -22,7 +22,7 @@
             "cwd": "${workspaceFolder}/",
             "justMyCode": false,
             "console": "integratedTerminal",
-            "env": {"CUDA_VISIBLE_DEVICES": "0"}
+            "env": {"CUDA_VISIBLE_DEVICES": "3"}
         }
     ]
 }

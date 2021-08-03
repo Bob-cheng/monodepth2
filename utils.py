@@ -10,6 +10,31 @@ import hashlib
 import zipfile
 from six.moves import urllib
 
+HEADER = '''\
+# .PCD v0.7 - Point Cloud Data file format
+VERSION 0.7
+FIELDS x y z intensity
+SIZE 4 4 4 4 
+TYPE F F F F 
+COUNT 1 1 1 1 
+WIDTH {}
+HEIGHT 1
+VIEWPOINT 0 0 0 1 0 0 0
+POINTS {}
+DATA ascii
+'''
+
+def write_pcd(points, save_pcd_path):
+    n = len(points)
+    lines = []
+    for i in range(n):
+        x, y, z, i, is_g = points[i]
+        lines.append('{:.6f} {:.6f} {:.6f} {}'.format( \
+            x, y, z, i))
+    with open(save_pcd_path, 'w') as f:
+        f.write(HEADER.format(n, n))
+        f.write('\n'.join(lines))
+
 
 def readlines(filename):
     """Read all the lines in a text file and return as a list
