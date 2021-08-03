@@ -64,7 +64,7 @@ if __name__ == '__main__':
     ap.add_argument("--l1-norm", dest='l1_norm', action='store_true', help="Wheather to use L1 Norm to find sensitive area")
     ap.add_argument("--random-scene", "-rs", action='store_true', help="Test whether we use different scene to train")
     ap.add_argument("--mask-step", "-ms", default=1, type=int, help="minimum mask unite size for mask optimization")
-    ap.add_argument("--depth-model", "-dm", type=str, default='monodepth2', choices=['monodepth2', 'depthhints'], help="select the depth model to be attacked")
+    ap.add_argument("--depth-model", "-dm", type=str, default='monodepth2', choices=['monodepth2', 'depthhints','manydepth'], help="select the depth model to be attacked")
     ap.add_argument("--random-seed", '-seed', type=int, default=17, help="random seed in optimization")
 
     args = vars(ap.parse_args())
@@ -170,12 +170,13 @@ if __name__ == '__main__':
     paint_mask_tensor = utils.get_mask_target(args['paint_mask'], car_mask_tensor.size(), paint_mask_init)
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
-    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"])
+    adv_scene_out, car_scene_out, _ , paint_scene_output= attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"],paint_mask_tensor)
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
     
     utils.save_pic(adv_scene_out[[0]], f'adv_scene_output', log_dir=log_dir)
     utils.save_pic(car_scene_out[[0]], f'car_scene_output', log_dir=log_dir)
     utils.save_pic(adv_car_output[[0]], f'adv_car_output', log_dir=log_dir)
+    # utils.save_pic(adv_car_output[[0]], f'paint_scene_output', log_dir=log_dir)
 
     logger.add_image('Output/Adv_scene', adv_scene_out[0], 0)
     logger.add_image('Output/Car_scene', car_scene_out[0], 0)

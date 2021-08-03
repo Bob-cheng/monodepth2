@@ -13,38 +13,38 @@
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
             //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
             "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "-2", "--steps", "20000", "-lr", "0.1", "-cw", "100", 
-                "-sw", "1000000", "-aw", "50000", "-tw", "0.0001", "-bs", "6", "-mw", "500"],
+                "-sw", "1000000", "-aw", "50000", "-tw", "0.0001", "-bs", "6", "-mw", "500", "-dm", "monodepth2"],
             // "args": ["-s", "Black.png", "-c", "Black.png", "-v", "Black.png", "-pm", "-2", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
             //     "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "100", "-bs", "6", "--l1-norm", "--random-scene", "-dm", "depthhints"],
-            "env": {"CUDA_VISIBLE_DEVICES": "7"}
+            "env": {"CUDA_VISIBLE_DEVICES": "2"}
 
-        },
-        {
-            "name": "cam_train.py",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cam_train.py",
-            "console": "integratedTerminal",
-            "args": ["-lr", "0.0001", "--epochs", "200", "-bs", "16"],
-            "env": {"CUDA_VISIBLE_DEVICES": "2"}
-        },
-        {
-            "name": "cam_extraction.py",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/cam_extraction.py",
-            "console": "integratedTerminal",
-            "justMyCode": false,
-            "env": {"CUDA_VISIBLE_DEVICES": "2"}
-        },
-        {
-            "name": "main.py",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "integratedTerminal",
-            "args": ["-s", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/style/Dirty_Back.png", "-c", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/content/SUV_Back.png"],
-            "env": {"CUDA_VISIBLE_DEVICES": "7"}
-        }
+        // },
+        // {
+        //     "name": "cam_train.py",
+        //     "type": "python",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/cam_train.py",
+        //     "console": "integratedTerminal",
+        //     "args": ["-lr", "0.0001", "--epochs", "200", "-bs", "16"],
+        //     "env": {"CUDA_VISIBLE_DEVICES": "4"}
+        // },
+        // {
+        //     "name": "cam_extraction.py",
+        //     "type": "python",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/cam_extraction.py",
+        //     "console": "integratedTerminal",
+        //     "justMyCode": false,
+        //     "env": {"CUDA_VISIBLE_DEVICES": "4"}
+        // },
+        // {
+        //     "name": "main.py",
+        //     "type": "python",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/main.py",
+        //     "console": "integratedTerminal",
+        //     "args": ["-s", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/style/Dirty_Back.png", "-c", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/content/SUV_Back.png"],
+        //     "env": {"CUDA_VISIBLE_DEVICES": "2"}
+         }
     ]
 }

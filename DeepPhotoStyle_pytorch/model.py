@@ -319,17 +319,26 @@ def get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, de
     elif method == 'mean':
         score = torch.sum(masked_output) / torch.sum(scene_car_mask)
     return score
-        
+
+def loss_fun1(x):
+    return torch.sum(x)
+
+def loss_fun2(x,y):
+    return (x-y+1)*torch.exp(torch.pow(x-y,1))
+
+def loss_fun3(x,y):
+    return torch.exp(torch.sin(x-y))       
 
 def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args):
     batch_size = args["batch_size"]
     # compose adversarial image
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
-    adv_scene, car_scene, scene_car_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size)
+    adv_scene, car_scene, scene_car_mask, scene_paint_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask)
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
+    
     # if args['l1_norm']:
     #     scene_depth_bs = scene_depth
     # else:
@@ -340,17 +349,24 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
         scene_depth_bs = scene_depth
 
     # calculate loss function
+    # loss_fun = torch.nn.MSELoss()
     loss_fun = torch.nn.MSELoss()
 
     # adv_scene_loss = loss_fun(adv_depth, (1 - scene_car_mask) * scene_depth_bs)
     # adv_scene_loss = loss_fun(adv_depth, scene_depth_bs)
-    adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
+    # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
     # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask), torch.zeros(1).float().to(config.device0))
-
-    adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
+    # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
+    test=loss_fun1(adv_depth * scene_paint_mask)
+    # adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
+    # test2=loss_fun(adv_depth * scene_car_mask,torch.zeros((adv_depth * scene_car_mask).size()).float().to(config.device0))
+    # area_loss=loss_fun2(torch.mean(paint_mask),torch.tensor(0.15).float().to(config.device0))
     w_scene = 1
     w_car = 1
-    adv_loss = w_scene * adv_scene_loss + w_car * adv_car_loss
+
+    # adv_loss = w_scene * adv_scene_loss + w_car * adv_car_loss
+    # adv_loss = 0.00001*area_loss*test
+    adv_loss =0.000001*test # 0.0000001*test*area_loss
     return adv_loss
 
 def get_lp_norm_loss(input_img, car_img, paint_mask):
@@ -416,7 +432,7 @@ def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
         # utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
     return adv_scene, car_scene, scene_car_mask
 
-def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
+def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,paint_mask):
     """
     Attach the car image and adversarial car image to the given scene with random position. 
     The scene could have multiple images (batch size > 1)
@@ -432,6 +448,7 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
         adv_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
         car_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
     scene_car_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
+    scene_paint_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
     
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
     
@@ -454,6 +471,7 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
         # car_img_trans = trans_seq(car_img).squeeze(0)
         
         car_mask_trans = trans_seq(car_mask)
+        paint_mask_trans = trans_seq(paint_mask)
 
         # paste it on the scene
         _, H_Car, W_Car = adv_car_img_trans.size()
@@ -474,10 +492,11 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size):
         car_scene[idx_Bat, :, h_range, w_range] = \
                 car_img_trans * car_mask_trans + car_area_in_scene * (1 - car_mask_trans)
         scene_car_mask[idx_Bat, :, h_range, w_range] = car_mask_trans
+        scene_paint_mask[idx_Bat, :, h_range, w_range] = paint_mask_trans
         # utils.save_pic(adv_scene[idx_Bat,:,:,:], f'attached_adv_scene_{idx_Bat}')
         # utils.save_pic(car_scene[idx_Bat,:,:,:], f'attached_car_scene_{idx_Bat}')
         # utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
-    return adv_scene, car_scene, scene_car_mask
+    return adv_scene, car_scene, scene_car_mask, scene_paint_mask
     
 def log_perterbation(logger, input_img, car_img, paint_mask, step):
     assert input_img.size() == car_img.size()
@@ -584,6 +603,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     
     # get deepth model
     depth_model = import_depth_model(scene_size, model_type=args['depth_model']).to(config.device0).eval()
+    print('Depth_model Done!')
+    
     for param in depth_model.parameters():
         param.requires_grad = False
     
@@ -730,7 +751,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         
                 print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f} l1_norm_loss: {:4f} mask_loss: {:4f}'.format(
                    style_score.item(), content_score.item(), tv_score.item(), rl_score.item(), adv_loss.item(), l1_loss.item(), mask_loss.item()))
-
+                
+                print('Box Area Percentage: {}%'.format(torch.mean(paint_mask)*torch.tensor(100/0.9216078186035156)))
+                
                 print('Total Loss: ', loss.item())
 
                 logger.add_scalar('Train/Style_loss', style_score.item(), run[0])
@@ -757,7 +780,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                         test_scene_img = test_scene_img_1
                     if args['l1_norm']:
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
-                    adv_scene_out, car_scene_out, _ = attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"])
+                    adv_scene_out, car_scene_out, _ , paint_scene_output= attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"],paint_mask)
                     result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
@@ -766,6 +789,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     logger.add_image('Train/Adv_patch', utils.extract_patch(saved_img, paint_mask)[0], run[0])
                     # utils.save_pic(adv_scene_out[[0]], run[0])
                     logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
+                    # logger.add_image('Train/Scene_paint_mask', paint_scene_output[0], run[0])
             return loss
 
         optimizer.step(closure)
@@ -774,7 +798,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         #     print("mask loss threshold reached!")
         #     break
     # a last corrention...
-    input_img.data = best_input
+    # input_img.data = best_input
     input_img.data.clamp_(0, 1)
 
     return input_img, depth_model
