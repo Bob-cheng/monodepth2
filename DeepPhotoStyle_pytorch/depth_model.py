@@ -1,6 +1,6 @@
 #%%
-from torch import cuda
-from depth_networks.manydepth import manydepth
+# from torch import cuda
+# from depth_networks.manydepth import manydepth
 # sys.path.append('depth_networks/manydepth/')
 # import manydepth
 import os
@@ -11,10 +11,11 @@ import json
 import argparse
 import numpy as np
 
-
-md2_model_dir = '/home/cheng443/projects/Monodepth/monodepth2_bob/models'
-DH_model_dir = os.path.join(os.getcwd(), 'depth_networks', 'depth-hints', 'models')
-manyd_model_dir = os.path.join(os.getcwd(), 'depth_networks', 'manydepth', 'manydepth', 'models')
+file_dir = os.path.dirname(os.path.realpath(__file__))
+file_parent_dir = os.path.dirname(file_dir)
+md2_model_dir = os.path.join(file_parent_dir, 'models')
+DH_model_dir = os.path.join(file_dir, 'depth_networks', 'depth-hints', 'models')
+manyd_model_dir = os.path.join(file_dir, 'depth_networks', 'manydepth', 'manydepth', 'models')
 # print(depth_model_dir)
 
 class DepthModelWrapper(torch.nn.Module):
@@ -45,7 +46,7 @@ class ManyDepthModelWrapper(torch.nn.Module):
         # depth_model_dir = manyd_model_dir
         # self.model_path = os.path.join(depth_model_dir, model_name)
         # encoder_path = os.path.join(self.model_path, "encoder.pth")
-        intrinsics_json_path=os.path.join(os.getcwd(), 'depth_networks', 'manydepth', 'assets','test_sequence_intrinsics.json')
+        intrinsics_json_path=os.path.join(file_dir, 'depth_networks', 'manydepth', 'assets','test_sequence_intrinsics.json')
         # self.encoder_dict = torch.load(encoder_path, map_location='cpu')
 
         self.K, self.invK = load_and_preprocess_intrinsics(intrinsics_json_path,
@@ -120,17 +121,18 @@ def import_depth_model(scene_size, model_type='monodepth2'):
         if model_type == 'monodepth2':
             model_name = 'mono+stereo_1024x320'
             depth_model_dir = md2_model_dir
-            sys.path.append("..")
+            sys.path.append(file_parent_dir)
             # from .. import networks # for lint perpose
             import networks
         elif model_type == 'depthhints':
             model_name = 'DH_MS_320_1024'
             depth_model_dir = DH_model_dir
-            sys.path.append("..")
+            sys.path.append(file_parent_dir)
             # from .. import networks # for lint perpose
             import networks
         elif model_type == 'manydepth':
-            sys.path.append('depth_networks/manydepth/manydepth/')
+            # sys.path.append(file_dir)
+            sys.path.append(os.path.join(file_dir, 'depth_networks/manydepth/manydepth/'))
             import networks
             model_name = 'KITTI_HR'
             depth_model_dir = manyd_model_dir
@@ -204,6 +206,6 @@ if __name__ == "__main__":
     plt.imshow(disp_np, cmap='magma', vmax=vmax)
     plt.title('Disparity')
     plt.axis('off')
-    # plt.savefig('temp_test.png')
+    plt.savefig('temp_test.png')
     
 # %%
