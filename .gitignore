@@ -7,3 +7,4 @@ kitti_data
 /models
 temp_*.png
 *.pth
+DeepPhotoStyle_pytorch/depth_networks/depth-hints/models/models.zip
