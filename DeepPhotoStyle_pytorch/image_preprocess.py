@@ -115,14 +115,79 @@ def process_scene_img(img_name):
     scene_img_crop.save(os.path.join(gen_scene_path, img_name))
     return scene_img_crop
 
+def split_image(mask_name, grid):
+    mask_path = os.path.join(src_car_path, mask_name)
+    ext_split = os.path.splitext(mask_name)
+    
+    if not os.path.exists(mask_path):
+        print('Mask not found')
+        return
+    img_mask = ImageOps.grayscale(pil.open(mask_path))
+    img_mask_np = np.array(img_mask)/255.0
+    img_mask_np[img_mask_np > 0.5] = 1
+    img_mask_np[img_mask_np <= 0.5] = 0
+    img_mask_np = img_mask_np.astype(int)
+    H, W = img_mask_np.shape
+    last_row = False
+    last_col = False
+    h_range = []
+    w_range = []
+    for i in range(H):
+        has_one = False
+        for j in range(W):
+            if abs(img_mask_np[i, j] - 1)  < 1e-10:
+                has_one = True
+                if not last_row:
+                    h_range.append(i)
+                    last_row = True
+                break
+        if not has_one and last_row:
+            h_range.append(i)
+            last_row = False
+    if len(h_range) == 1:
+        h_range.append(H)
+    
+    for j in range(W):
+        has_one = False
+        for i in range(H):
+            if abs(img_mask_np[i, j] - 1)  < 1e-10:
+                has_one = True
+                if not last_col:
+                    w_range.append(j)
+                    last_col = True
+                break
+        if not has_one and last_col:
+            w_range.append(j)
+            last_col = False
+    if len(w_range) == 1:
+        w_range.append(W)
+    
+    h_step = (h_range[1] - h_range[0]) // grid[0]
+    w_step = (w_range[1] - w_range[0]) // grid[1]
+    
+    for i in range(grid[0]):
+        for j in range(grid[1]):
+            split_mask = np.zeros([H, W])
+            h_start = h_range[0] + i        * h_step
+            h_end   = h_range[0] + (i+1)    * h_step
+            w_start = w_range[0] + j        * w_step
+            w_end   = w_range[0] + (j+1)    * w_step
+            split_mask[h_start: h_end, w_start : w_end] = 1
+            mask_no = 11+j*grid[0]+i
+            mask_out_path = os.path.join(src_car_path, '{}{:0>2d}{}'.format(ext_split[0][:-2], mask_no, ext_split[1]))
+            pil.fromarray((split_mask*255).astype(np.uint8), 'L').save(mask_out_path)
+
+
+
 
 
 #%%
 if __name__ == '__main__':
-    prepare_dir()
-    process_style_img("Dirty_Back.png")
-    process_content_img("Warnning.png")
-    process_car_img("Wall.png", paintMask_no='01')
-    process_scene_img("0000000090.png")
-    process_scene_img("000043.png")
+    split_image('Pedestrain_PaintMask10.png', [3,1])
+    # prepare_dir()
+    # process_style_img("Dirty_Back.png")
+    # process_content_img("Warnning.png")
+    # process_car_img("Wall.png", paintMask_no='01')
+    # process_scene_img("0000000090.png")
+    # process_scene_img("000043.png")
 # %%
