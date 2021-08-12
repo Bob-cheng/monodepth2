@@ -1,3 +1,6 @@
 {
-    "jupyter.jupyterServerType": "local"
+    "jupyter.jupyterServerType": "local",
+    "python.analysis.extraPaths": [
+        "./MSF-ADV/pytorch-caffe"
+    ]
 }

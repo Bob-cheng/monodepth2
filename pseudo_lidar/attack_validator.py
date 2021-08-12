@@ -96,8 +96,17 @@ def project_disp_to_points(calib, disp, max_high):
     valid = (cloud[:, 0] >= 0) & (cloud[:, 2] < max_high)
     return cloud[valid]
 
+def load_mask_np(mask_path):
+    img_mask = ImageOps.grayscale(pil.open(mask_path))
+    img_mask_np = np.array(img_mask) / 255.0
+    img_mask_np[img_mask_np > 0.5] = 1
+    img_mask_np[img_mask_np <= 0.5] = 0
+    img_mask_np = img_mask_np.astype(int)
+    return img_mask_np
+
 class AttackValidator():
     def __init__(self, root_path, car_name, adv_no, scene_name, depth_model, scene_dataset=False) -> None:
+        self.root_path = root_path
         self.adv_car_img_path = os.path.join(root_path, "Adv_car", f"{car_name}_{adv_no}.png")
         self.ben_car_img_path = os.path.join(root_path, "Ben_car", f"{car_name}.png")
         self.car_mask_img_path = os.path.splitext(self.ben_car_img_path)[0] + '_CarMask.png'
@@ -105,11 +114,12 @@ class AttackValidator():
         self.device0 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.depth_model = depth_model
         self.calib_path = "/data/cheng443/kitti/object/training/calib/003086.txt"
-        self.pc_dir = os.path.join(root_path, 'PointCloud')
-        self.ben_pc_path = os.path.join(root_path, 'PointCloud', f'{car_name}_{adv_no}_ben')
-        self.adv_pc_path = os.path.join(root_path, 'PointCloud', f'{car_name}_{adv_no}_adv')
-        self.scene_pc_path = os.path.join(root_path, 'PointCloud', f'{car_name}_{adv_no}_sce')
-        self.compare_path = os.path.join(root_path, 'PointCloud', f'{car_name}_{adv_no}_compare.png')
+        self.pc_dir = os.path.join(root_path, 'PointCloud', f"{car_name}_{adv_no}")
+        os.makedirs(self.pc_dir, exist_ok=True)
+        self.ben_pc_path = os.path.join(self.pc_dir, f'{car_name}_{adv_no}_ben')
+        self.adv_pc_path = os.path.join(self.pc_dir, f'{car_name}_{adv_no}_adv')
+        self.scene_pc_path = os.path.join(self.pc_dir, f'{car_name}_{adv_no}_sce')
+        self.compare_path = os.path.join(self.pc_dir, f'{car_name}_{adv_no}_compare.png')
         if scene_dataset:
             kitti_loader_train = KittiLoader(mode='train',  train_list='trainval.txt', val_list='val.txt')
             self.train_loader = kitti_loader_train # DataLoader(kitti_loader_train, batch_size=1, shuffle=False, pin_memory=True)
@@ -131,6 +141,49 @@ class AttackValidator():
         assert self.scene_size == scene_img_crop.size
         # scene_img_crop.save(os.path.join(gen_scene_path, img_name))
         return scene_img_crop
+
+    def do_patch_cross_check(self, target_names, patch_name):
+        self.cross_check_output_path = os.path.join(self.root_path, "Cross_check")
+        self.patch_path = os.path.join(self.root_path, "Patch_img", f"{patch_name}.png")
+        self.patch_img = pil.open(self.patch_path)
+        p_W, p_H = self.patch_img.size
+        self.cross_target_pairs_tensor = []
+        cross_target_paths = []
+        for name in target_names:
+            cross_target_paths.append((os.path.join(self.root_path, 'Ben_car', f"{name}.png"),
+                                      os.path.join(self.root_path, 'Ben_car', f"{name}_CarMask.png"), name))
+        for paths in cross_target_paths:
+            ben_car_img = pil.open(paths[0])
+            car_mask_img_np = load_mask_np(paths[1])
+            adv_car_img = ben_car_img.copy()
+            W, H = adv_car_img.size
+            left = (W - p_W) // 2
+            bottom = 120
+            top = H - bottom - p_H
+            assert left > 0 and top > 0
+            adv_car_img.paste(self.patch_img, (left, top))
+            ben_car_img = transforms.ToTensor()(ben_car_img)[:3,:,:].unsqueeze(0).to(self.device0, torch.float)
+            adv_car_img = transforms.ToTensor()(adv_car_img)[:3,:,:].unsqueeze(0).to(self.device0, torch.float)
+            car_mask_img = torch.from_numpy(car_mask_img_np).unsqueeze(0).to(self.device0, torch.float)
+            self.cross_target_pairs_tensor.append((ben_car_img, adv_car_img, car_mask_img))
+            label = f"{patch_name}_on_{paths[2]}"
+            output_path = os.path.join(self.cross_check_output_path, label)
+            os.makedirs(output_path, exist_ok=True)
+
+            adv_scene, car_scene = self.attach_car_to_scene(adv_car_img, ben_car_img, car_mask_img, 1)
+            unloader = transforms.ToPILImage() # tensor to PIL image
+            adv_scene_img = unloader(adv_scene.cpu().squeeze(0))
+            ben_scene_img = unloader(car_scene.cpu().squeeze(0))
+            adv_scene_img.save(os.path.join(output_path, label+'_adv.png'))
+            ben_scene_img.save(os.path.join(output_path, label+'_ben.png'))
+            with torch.no_grad():
+                adv_scene_disp = self.depth_model(adv_scene).squeeze().cpu().numpy()
+                ben_scene_disp = self.depth_model(car_scene).squeeze().cpu().numpy()
+            adv_scene_lidar = generate_point_cloud(adv_scene_disp, self.calib_path, os.path.join(output_path, label+'_adv'), 3)
+            ben_scene_lidar = generate_point_cloud(ben_scene_disp, self.calib_path, os.path.join(output_path, label+'_ben'), 3)
+            pil_image,_,_ = eval_depth_diff(car_scene, adv_scene, self.depth_model, '')
+            pil_image.save(os.path.join(output_path, label+'_compare.png'))
+
     
     def load_imgs(self):
         ben_car_img = pil.open(self.ben_car_img_path)
@@ -144,17 +197,25 @@ class AttackValidator():
         else:
             self.scene_tensor, _ = self.train_loader[self.dataset_idx]
             self.scene_tensor = self.scene_tensor.unsqueeze(0).to(self.device0, torch.float)
-        img_mask = ImageOps.grayscale(pil.open(self.car_mask_img_path))
-        img_mask_np = np.array(img_mask) / 255.0
-        img_mask_np[img_mask_np > 0.5] = 1
-        img_mask_np[img_mask_np <= 0.5] = 0
-        img_mask_np = img_mask_np.astype(int)
+        img_mask_np = load_mask_np(self.car_mask_img_path)
+        # img_mask = ImageOps.grayscale(pil.open())
+        # img_mask_np = np.array(img_mask) / 255.0
+        # img_mask_np[img_mask_np > 0.5] = 1
+        # img_mask_np[img_mask_np <= 0.5] = 0
+        # img_mask_np = img_mask_np.astype(int)
         self.car_mask_tensor = torch.from_numpy(img_mask_np).unsqueeze(0).float().to(self.device0).requires_grad_(False)
         print("ben car size: {} \n adv car size: {} \n scene image size: {} \n car mask size: {}".format(
             self.ben_car_tensor.size(), self.adv_car_tensor.size(), self.scene_tensor.size(), self.car_mask_tensor.size()))
     
     def get_depth_data(self):
-        self.attach_car_to_scene(1)
+        adv_scene, car_scene = self.attach_car_to_scene(self.adv_car_tensor, self.ben_car_tensor, self.car_mask_tensor, 1)
+        self.adv_scene_tensor = adv_scene
+        self.ben_scene_tensor = car_scene
+        unloader = transforms.ToPILImage() # tensor to PIL image
+        adv_scene_img = unloader(self.adv_scene_tensor.cpu().squeeze(0))
+        ben_scene_img = unloader(self.ben_scene_tensor.cpu().squeeze(0))
+        adv_scene_img.save(self.adv_pc_path + '.png')
+        ben_scene_img.save(self.ben_pc_path + '.png')
         with torch.no_grad():
             adv_scene_disp = self.depth_model(self.adv_scene_tensor).squeeze().cpu().numpy()
             ben_scene_disp = self.depth_model(self.ben_scene_tensor).squeeze().cpu().numpy()
@@ -180,7 +241,7 @@ class AttackValidator():
             visualize_frame(2, [self.adv_scene_lidar], self.adv_scene_bboxes)
 
 
-    def attach_car_to_scene(self, batch_size):
+    def attach_car_to_scene(self, adv_car_img, car_img, car_mask, batch_size):
         """
         Attach the car image and adversarial car image to the given scene with random position. 
         The scene could have multiple images (batch size > 1)
@@ -189,9 +250,9 @@ class AttackValidator():
         car_mask:      1 * H * W
         """
         scene_img = self.scene_tensor
-        adv_car_img = self.adv_car_tensor
-        car_img = self.ben_car_tensor
-        car_mask = self.car_mask_tensor
+        # adv_car_img = self.adv_car_tensor
+        # car_img = self.ben_car_tensor
+        # car_mask = self.car_mask_tensor
         _, _, H, W = adv_car_img.size()
         if scene_img.size()[0] == batch_size:
             adv_scene = scene_img.clone()
@@ -207,7 +268,7 @@ class AttackValidator():
             # scale = 0.7 # 600 -- 0.4/0.3, 300 -- 0.7
             scale_upper = 0.4
             scale_lower = 0.3
-            scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
+            scale = 0.35 #(scale_upper - scale_lower) * torch.rand(1) + scale_lower
             # Do some transformation on the adv_car_img together with car_mask
             trans_seq = transforms.Compose([ 
                 # transforms.RandomRotation(degrees=3),
@@ -230,7 +291,7 @@ class AttackValidator():
             bottom_range = int((H_Sce - H_Car)/2)
 
             bottom_height = int(bottom_range - scale * max(bottom_range - 10, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
-            left = random.randint(50, left_range-50)
+            left = 400 #random.randint(50, left_range-50)
             h_index = H_Sce - H_Car - bottom_height
             w_index = left
             h_range = slice(h_index, h_index + H_Car)
@@ -242,14 +303,9 @@ class AttackValidator():
             car_scene[idx_Bat, :, h_range, w_range] = \
                     car_img_trans * car_mask_trans + car_area_in_scene * (1 - car_mask_trans)
             scene_car_mask[idx_Bat, :, h_range, w_range] = car_mask_trans
+        return adv_scene, car_scene
 
-        self.adv_scene_tensor = adv_scene
-        self.ben_scene_tensor = car_scene
-        unloader = transforms.ToPILImage() # tensor to PIL image
-        adv_scene_img = unloader(self.adv_scene_tensor.cpu().squeeze(0))
-        ben_scene_img = unloader(self.ben_scene_tensor.cpu().squeeze(0))
-        adv_scene_img.save(self.adv_pc_path + '.png')
-        ben_scene_img.save(self.ben_pc_path + '.png')
+        
             
 
 if __name__ == '__main__':
@@ -261,6 +317,8 @@ if __name__ == '__main__':
     depth_model = import_depth_model((1024, 320), 'monodepth2').to(torch.device("cuda")).eval()
     validator = AttackValidator(generated_root_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True)
     validator.get_depth_data()
-    validator.run_obj_det_model()
-    # validator.vis_frame('adv')
-    validator.vis_frame('benign')
+
+    validator.do_patch_cross_check(['Sedan_Back', 'SUV_Back', 'Wall'], 'BMW_001')
+    # validator.run_obj_det_model()
+    # # validator.vis_frame('adv')
+    # validator.vis_frame('benign')
