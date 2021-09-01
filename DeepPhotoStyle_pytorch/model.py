@@ -18,6 +18,7 @@ import matplotlib as mpl
 import matplotlib.cm as cm
 from mwUpdater import MaskWeightUpdater
 from dataLoader import KittiLoader
+import os
 
 
 
@@ -320,21 +321,34 @@ def get_output_car_depth(input_img, car_img, scene_img, paint_mask, car_mask, de
         score = torch.sum(masked_output) / torch.sum(scene_car_mask)
     return score
 
-def loss_fun1(x):
-    return torch.sum(x)
 
-def loss_fun2(x,y):
-    return (x-y+1)*torch.exp(torch.pow(x-y,1))
+def disp_to_depth(disp,min_depth,max_depth):
+# """Convert network's sigmoid output into depth prediction
+# The formula for this conversion is given in the 'additional considerations'
+# section of the paper.
+# """
+    min_disp=1/max_depth
+    max_disp=1/min_depth
+    scaled_disp=min_disp+(max_disp-min_disp)*disp
+    depth=1/scaled_disp
+    return scaled_disp,depth
 
-def loss_fun3(x,y):
-    return torch.exp(torch.sin(x-y))       
+
+def loss_fun1(x,mask):
+    return torch.sum(x*mask)/torch.sum(mask)
+
+def loss_fun2(x,mask):
+    return torch.sum(torch.pow(x*mask,2))/torch.sum(mask)
+
+def loss_fun3(x,mask):
+    return torch.sum(x)       
 
 def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_model, args):
     batch_size = args["batch_size"]
     # compose adversarial image
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
-    adv_scene, car_scene, scene_car_mask, scene_paint_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask)
+    adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
     adv_depth = depth_model(adv_scene)
     car_depth = depth_model(car_scene)
     scene_depth = depth_model(scene_img)
@@ -357,16 +371,21 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
     # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask), torch.zeros(1).float().to(config.device0))
     # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
-    test=loss_fun1(adv_depth * scene_paint_mask)
+    # test=loss_fun1(adv_depth * scene_paint_mask)
     # adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
     # test2=loss_fun(adv_depth * scene_car_mask,torch.zeros((adv_depth * scene_car_mask).size()).float().to(config.device0))
     # area_loss=loss_fun2(torch.mean(paint_mask),torch.tensor(0.15).float().to(config.device0))
-    w_scene = 1
-    w_car = 1
+    # w_scene = 1
+    # w_car = 1
 
+    # adv_scene_loss = loss_fun(torch.max(adv_depth * scene_car_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
+    # adv_car_loss = -loss_fun(adv_depth * scene_car_mask, car_depth * scene_car_mask)
     # adv_loss = w_scene * adv_scene_loss + w_car * adv_car_loss
-    # adv_loss = 0.00001*area_loss*test
-    adv_loss =0.000001*test # 0.0000001*test*area_loss
+    
+    # dep=torch.clamp(disp_to_depth(torch.abs(torch.tensor(adv_depth)),0.1,100)[1]*5.4,max=50)/torch.sum(scene_obj_mask)
+    # test=-0.00001*torch.sum(dep)
+    test=loss_fun2(adv_depth,scene_obj_mask)
+    adv_loss = test
     return adv_loss
 
 def get_lp_norm_loss(input_img, car_img, paint_mask):
@@ -432,7 +451,7 @@ def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
         # utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
     return adv_scene, car_scene, scene_car_mask
 
-def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,paint_mask):
+def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,paint_mask,object_name):
     """
     Attach the car image and adversarial car image to the given scene with random position. 
     The scene could have multiple images (batch size > 1)
@@ -454,8 +473,14 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,pa
     
     for idx_Bat in range(B_Sce):
         # scale = 0.7 # 600 -- 0.4, 300 -- 0.7
+        # car 0.5/0.4 people 0.07/0.035 tb 0.3/0.2 tb2 0.5/0.4 pedestrain2 0.15/0.13
         scale_upper = 0.5
-        scale_lower = 0.3
+        scale_lower = 0.4
+
+        if object_name == 'Pedestrain2.png':
+            scale_upper = 0.15
+            scale_lower = 0.13
+
         scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
@@ -478,8 +503,11 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,pa
         
         left_range = W_Sce - W_Car
         bottom_range = int((H_Sce - H_Car)/2)
-
-        bottom_height = int(bottom_range - scale * max(bottom_range - 10, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
+        ## tb2/car +10 p2 +100
+        scale2=10
+        if object_name == 'Pedestrain2.png':
+            scale2=100
+        bottom_height = int(bottom_range - scale * max(bottom_range + scale2, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
         left = random.randint(50, left_range-50)
         h_index = H_Sce - H_Car - bottom_height
         w_index = left
@@ -497,7 +525,75 @@ def attach_car_to_scene(scene_img, adv_car_img, car_img, car_mask, batch_size,pa
         # utils.save_pic(car_scene[idx_Bat,:,:,:], f'attached_car_scene_{idx_Bat}')
         # utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
     return adv_scene, car_scene, scene_car_mask, scene_paint_mask
+
+def attach_car_to_scene_validator(scene_img, adv_car_img, car_img, car_mask, batch_size,paint_mask,mask):
+    """
+    Attach the car image and adversarial car image to the given scene with random position. 
+    The scene could have multiple images (batch size > 1)
+    scene_img: B * C * H * W
+    car_img:   1 * C * H * W
+    car_mask:      1 * H * W
+    """
+    _, _, H, W = adv_car_img.size()
+    if scene_img.size()[0] == batch_size:
+        adv_scene = scene_img.clone()
+        car_scene = scene_img.clone()
+    else:
+        adv_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
+        car_scene = torch.cat(batch_size * [scene_img.clone()], dim=0)
+    scene_car_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
+    scene_paint_mask = torch.zeros(adv_scene.size()).float().to(config.device0)
     
+    B_Sce, _, H_Sce, W_Sce = adv_scene.size()
+    
+    for idx_Bat in range(B_Sce):
+        # car/tb2 0.4496 p2 0.15
+        scale = 0.4496
+        if mask == 'Pedestrain2.png':
+            scale=0.15
+        # Do some transformation on the adv_car_img together with car_mask
+        trans_seq = transforms.Compose([ 
+            # transforms.RandomRotation(degrees=3),
+            transforms.Resize([int(H * scale), int(W * scale)])
+            ])
+
+        adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
+        car_img_trans = trans_seq(car_img).squeeze(0)
+
+        # adv_car_img_trans = trans_seq(adv_car_img).squeeze(0)
+        # car_img_trans = trans_seq(car_img).squeeze(0)
+        
+        car_mask_trans = trans_seq(car_mask)
+        paint_mask_trans = trans_seq(paint_mask)
+
+        # paste it on the scene
+        _, H_Car, W_Car = adv_car_img_trans.size()
+        
+        left_range = W_Sce - W_Car
+        bottom_range = int((H_Sce - H_Car)/2)
+        ## car +50 p2 +100
+        scale2=50
+        if mask == 'Pedestrain2.png':
+            scale2=120
+        bottom_height = int(bottom_range - scale * max(bottom_range + scale2, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
+        left = 380
+        h_index = H_Sce - H_Car - bottom_height
+        w_index = left
+        h_range = slice(h_index, h_index + H_Car)
+        w_range = slice(w_index, w_index + W_Car)
+
+        car_area_in_scene = adv_scene[idx_Bat, :, h_range, w_range]
+        adv_scene[idx_Bat, :, h_range, w_range] = \
+            adv_car_img_trans * car_mask_trans + car_area_in_scene * (1- car_mask_trans)
+        car_scene[idx_Bat, :, h_range, w_range] = \
+                car_img_trans * car_mask_trans + car_area_in_scene * (1 - car_mask_trans)
+        scene_car_mask[idx_Bat, :, h_range, w_range] = car_mask_trans
+        scene_paint_mask[idx_Bat, :, h_range, w_range] = paint_mask_trans
+        # utils.save_pic(adv_scene[idx_Bat,:,:,:], f'attached_adv_scene_{idx_Bat}')
+        # utils.save_pic(car_scene[idx_Bat,:,:,:], f'attached_car_scene_{idx_Bat}')
+        # utils.save_pic(scene_car_mask[idx_Bat,:,:,:], f'attached_scene_mask_{idx_Bat}')
+    return adv_scene, car_scene, scene_car_mask, scene_paint_mask
+
 def log_perterbation(logger, input_img, car_img, paint_mask, step):
     assert input_img.size() == car_img.size()
     adv_car_image = input_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
@@ -556,11 +652,26 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     # utils.save_pic(input_img_grad_l1, 'grad_vis', '/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/')
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
-def get_mask_loss(paint_mask):
+def get_mask_loss(paint_mask,mask):
     # mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
-    mapped_mask = paint_mask
     # loss = torch.sum(torch.abs(mapped_mask))
-    loss = torch.mean(torch.abs(mapped_mask))
+    # mapped_mask = paint_mask
+    # loss = torch.mean(torch.abs(mapped_mask))
+    loss = torch.sum(paint_mask)/torch.sum(mask)
+    return loss
+
+def mask_loss_fucntion(size,threshold,mask_weight):
+    # loss=torch.exp(torch.abs(size-threshold))*mask_weight
+    # if size-threshold < 0:
+    #     mask_weight*=0
+    # loss=torch.tanh(abs(size-threshold))*mask_weight # not good
+    # loss=torch.sqrt(abs(size-threshold))*mask_weight # good
+    # loss=torch.abs(size-threshold/2)*mask_weight # not good
+    loss=torch.abs(size-threshold)*mask_weight # okay
+    # if size-threshold < 0.05*threshold:
+    #     loss*=0.001
+    # if size-threshold<0:
+    #     loss*=0.001
     return loss
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
@@ -593,7 +704,12 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
 
     # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
-    mask_loss_thresh = 1/8
+    if args['vehicle']=='BMW.png':
+        mask_loss_thresh = 0.09 #1/9
+    elif args['vehicle']=='Pedestrain2.png':
+        mask_loss_thresh = 1/3
+    elif args['vehicle']=='TrafficBarrier2.png':
+        mask_loss_thresh = 1/6
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh)
 
 
@@ -602,6 +718,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
     
     # get deepth model
+    scene_size=(1024,320)
     depth_model = import_depth_model(scene_size, model_type=args['depth_model']).to(config.device0).eval()
     print('Depth_model Done!')
     
@@ -609,13 +726,19 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         param.requires_grad = False
     
     # optimizer = get_input_optimizer(input_img, learning_rate)
-    # optimizer = get_input_optimizer([input_img, paint_mask_inf], learning_rate)
-    if args['paint_mask'] == '-1' or args['paint_mask'] == '-2':
-        optimizer = get_input_optimizer([input_img, paint_mask_init], learning_rate, args)
-    else:
-        optimizer = get_input_optimizer([input_img], learning_rate, args)
+    # if args['paint_mask'] == '-1' or args['paint_mask'] == '-2':
+    #     optimizer = get_input_optimizer([input_img, paint_mask_init], learning_rate, args)
+    # else:
+    #     optimizer = get_input_optimizer([input_img], learning_rate, args)
+    # LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
 
+    mask_optimizer = optim.Adam([paint_mask_init.requires_grad_()], lr=0.1, betas=(0.5, 0.9))
+    optimizer = get_input_optimizer([input_img], learning_rate, args)
+    # optimizer2 = get_input_optimizer([input_img, paint_mask_init], learning_rate, args)
     LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
+    # LR_decay2 = PolynomialLRDecay(optimizer2, num_steps//2, learning_rate/2, 0.9)
+    run_mask_optimize = False
+
 
     print("Optimizing...")
     print('*'*20)
@@ -649,6 +772,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             nonlocal train_loader_iter
             nonlocal paint_mask_init
             nonlocal mask_loss
+            nonlocal run_mask_optimize
 
             input_img.data.clamp_(0, 1)
             # paint_mask = utils.from_inf_to_mask(paint_mask_inf, car_mask.shape)
@@ -658,6 +782,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             # paint_mask_boarders.data += torch.normal(torch.zeros(4), torch.ones(4)*1).to(config.device0)
             paint_mask = utils.get_mask_target(args['paint_mask'], car_mask.size(), paint_mask_init)
             optimizer.zero_grad()
+            mask_optimizer.zero_grad()
 
             style_score = torch.zeros(1).float().to(config.device0)
             content_score = torch.zeros(1).float().to(config.device0)
@@ -697,9 +822,13 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
             # adv_weight = 1000000
             adv_loss *= adv_weight
 
-            mask_loss = get_mask_loss(paint_mask)
-            mw = mwUpdater.step(mask_loss)
-            mask_loss *= mw
+            mask_loss = get_mask_loss(paint_mask,car_mask)
+            #mw = mwUpdater.step(mask_loss,adv_loss)
+            # mask_loss= mask_loss_fucntion(mask_loss,mask_loss_thresh,adv_loss)
+            mask_loss= mask_loss_fucntion(mask_loss,mask_loss_thresh,mask_weight)
+
+            if args['paint_mask'] != '-2':
+                mask_loss *=0
 
             if args['l1_norm']:
                 l1_loss = get_lp_norm_loss(input_img, car_img, paint_mask)
@@ -736,23 +865,33 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 best_adv_loss = adv_loss
                 best_adv_input = input_img.data.clone()
 
-            # if run[0] == num_steps // 2:
-            #     # Store the best temp result to initialize second stage input
-            #     input_img.data = best_input
-            #     best_loss = 1e10
-            #     LR_decay.step(0)
+            if run[0] == num_steps // 2:
+                # Store the best temp result to initialize second stage input
+                # input_img.data = best_input
+                # best_loss = 1e10
+                # LR_decay.step(0)
+                if args['paint_mask'] == '-2': # late start code
+                    run_mask_optimize = True
+                    print("start optimizing mask")
+
+            if args['paint_mask'] == '-2' and run_mask_optimize:
+                if torch.sum(paint_mask)/torch.sum(car_mask) < mask_loss_thresh:
+                    run_mask_optimize = False
+                    print(run[0], "Stop optimizing mask")
+                else:            
+                    mask_optimizer.step()
             
             # Gradient cliping deal with gradient exploding
             clip_grad_norm_(model.parameters(), 15.0)
           
             run[0] += 1
-            if run[0] % 30 == 0 or run[0] == 1:
+            if run[0] % 20 == 0 or run[0] == 1:
                 print("run {}/{}:".format(run, num_steps))
         
                 print('Style Loss: {:4f} Content Loss: {:4f} TV Loss: {:4f} real loss: {:4f} adv_loss: {:4f} l1_norm_loss: {:4f} mask_loss: {:4f}'.format(
                    style_score.item(), content_score.item(), tv_score.item(), rl_score.item(), adv_loss.item(), l1_loss.item(), mask_loss.item()))
                 
-                print('Box Area Percentage: {}%'.format(torch.mean(paint_mask)*torch.tensor(100/0.9216078186035156)))
+                print('Box Area Percentage: {} %'.format(torch.sum(paint_mask)/torch.sum(car_mask)*torch.tensor(100)))
                 
                 print('Total Loss: ', loss.item())
 
@@ -768,20 +907,48 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 # logger.add_image('Train/Paint_mask', np.moveaxis(color_mapping(paint_mask, vmax=1, vmin=0), -1, 0), run[0])
 
 
-                if run[0] % 300 == 0 or run[0] == 1:
+                if run[0] % 200 == 0 or run[0] == 1:
                     texture_img = utils.texture_to_car_size(input_img.data.clone(), car_img.size())
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
                     saved_img.data.clamp_(0, 1)
-                    if args['random_scene']:
-                        test_scene_img, _ = next(train_loader_iter)
-                        test_scene_img = test_scene_img.to(config.device0)
-                    else:
-                        test_scene_img = test_scene_img_1
+
+                    # if args['random_scene']:
+                    #     test_scene_img, _ = next(train_loader_iter)
+                    #     test_scene_img = test_scene_img.to(config.device0)
+                    # else:
+                    #     test_scene_img = test_scene_img_1
                     if args['l1_norm']:
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
-                    adv_scene_out, car_scene_out, _ , paint_scene_output= attach_car_to_scene(test_scene_img, saved_img, car_img, car_mask, args["batch_size"],paint_mask)
-                    result_img, _, _ = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
+
+                    generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
+                    scene_name_set = ['000001','000004','000009','000027','000033','000034','000038','000042','000051','000059','000097','000127','0000000090','000005']
+                    mean_depth_diff=0
+                    for validator_scene_name in scene_name_set:
+                        test_scene_img_path=os.path.join(generated_root_path, "Scene",  f"{validator_scene_name}.png")
+                        test_scene_img = pil.open(test_scene_img_path)
+                        original_w, original_h = test_scene_img.size
+                        scene_size = (1024, 320)
+                        new_w, new_h = scene_size
+                        left = (original_w - new_w)//2
+                        right = left + new_w
+                        top = original_h - new_h
+                        bottom = original_h
+                        test_scene_img = test_scene_img.crop((left, top, right, bottom))
+                        test_scene_img = transforms.ToTensor()(test_scene_img)[:3,:,:].unsqueeze(0).to(device='cuda')
+
+                        adv_scene_out, car_scene_out, scene_car_mask , scene_paint_mask= attach_car_to_scene_validator(test_scene_img, saved_img, car_img, car_mask,args['batch_size'],paint_mask,args['vehicle'])
+                        result_img, disp1, disp2 = eval_depth_diff(car_scene_out[[0]], adv_scene_out[[0]], depth_model, f'depth_diff_{run[0]}')
+                    
+                        scaler=5.4
+                        dep1=torch.clamp(disp_to_depth(torch.abs(torch.tensor(disp1)),0.1,100)[1]*scene_car_mask.unsqueeze(0).cpu()*scaler,max=50)
+                        dep2=torch.clamp(disp_to_depth(torch.abs(torch.tensor(disp2)),0.1,100)[1]*scene_car_mask.unsqueeze(0).cpu()*scaler,max=50)
+                        mean_depth_diff+=torch.sum(torch.abs(dep1-dep2))/torch.sum(scene_car_mask)
+                    mean_depth_diff/=len(scene_name_set)
+
+                    print('Mean of depth difference: {} '.format(mean_depth_diff))
+                    logger.add_scalar('Train/Mean_depth_diff', mean_depth_diff, run[0])
+                    
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])
