@@ -73,7 +73,7 @@ class ManyDepthModelWrapper(torch.nn.Module):
 
         outputs = self.decoder(features)
         disp = outputs[("disp", 0)]
-        return disp
+        return disp/8.6437
 
 def load_and_preprocess_image(image_path, resize_width, resize_height):
     image = pil.open(image_path).convert('RGB')
@@ -111,6 +111,8 @@ def disp_to_depth(disp, min_depth, max_depth):
     scaled_disp = min_disp + (max_disp - min_disp) * disp
     depth = 1 / scaled_disp
     return scaled_disp, depth
+
+
 
 def import_depth_model(scene_size, model_type='monodepth2'):
     """
