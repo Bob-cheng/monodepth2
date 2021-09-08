@@ -12,13 +12,17 @@
             "console": "integratedTerminal",
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Wall.png", "-pm", "01", "--steps", "10000", "-lr", "0.1", "-cw", "100", 
             //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6"],
-            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "-2", "--steps", "20000", "-lr", "0.1", "-cw", "100", 
-                "-sw", "1000000", "-aw", "50000", "-tw", "0.0001", "-bs", "6", "-mw", "500", "-dm", "monodepth2"],
-            // "args": ["-s", "Black.png", "-c", "Black.png", "-v", "Black.png", "-pm", "-2", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
-            //     "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "100", "-bs", "6", "--l1-norm", "--random-scene", "-dm", "depthhints"],
-            "env": {"CUDA_VISIBLE_DEVICES": "2"}
-
-        // },
+            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Pedestrain2.png", "-pm", "13", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
+                "-sw", "1000000", "-aw", "200", "-tw", "0.0001", "-bs", "6", "-mw", "8000.0", "-dm", "depthhints","-rw","10", "-lp","p_-2_hints","--random-scene"],
+            // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "Pedestrain2.png", "-pm", "11", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
+            //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6", "-mw", "8000.0", "-dm", "depthhints","-rw","10", 
+            //     "--random-scene", "-lp","B_randS_M0.1"],
+            // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "08", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
+            //     "-sw", "1000000", "-aw", "1000000", "-tw", "0.0001", "-bs", "6", "-mw", "15000.0", "-dm", "monodepth2","-rw","10", "-lp","B_mono_car_08_bestp1"],
+            // "args": ["-s", "Pedestrain2.png", "-c", "Pedestrain2.png", "-v", "Pedestrain2.png", "-pm", "-2", "--mask-step", "4", "--steps", "10000", "-lr", "0.1", "-cw", "0", 
+            // "-sw", "0", "-aw", "10000", "-tw", "0", "-l1w", "300", "-mw", "100", "-bs", "6", "--l1-norm", "--random-scene", "-dm", "depthhints","-lp","B_randS_L1"],
+            "env": {"CUDA_VISIBLE_DEVICES": "7"}
+        },
         // {
         //     "name": "cam_train.py",
         //     "type": "python",
@@ -45,6 +49,6 @@
         //     "console": "integratedTerminal",
         //     "args": ["-s", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/style/Dirty_Back.png", "-c", "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/gen_img/content/SUV_Back.png"],
         //     "env": {"CUDA_VISIBLE_DEVICES": "2"}
-         }
-    ]
-}
+        ]
+    
+        }

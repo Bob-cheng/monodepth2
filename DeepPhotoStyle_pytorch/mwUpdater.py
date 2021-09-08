@@ -9,7 +9,7 @@ class MaskWeightUpdater():
         self.maskloss_thresh  = maskloss_thresh
         self.mask_weight = initweight
     
-    def step(self, maskloss):
+    def step(self, maskloss,adv_loss):
         ref_value = maskloss.item()
         self.current_step += 1
         if self.current_step % self.interval == 0:
@@ -25,11 +25,11 @@ class MaskWeightUpdater():
             if (ref_value > self.maskloss_thresh * bound):
                 self.mask_weight = self.init_weight
             elif (ref_value < self.maskloss_thresh / bound):
-                self.mask_weight = -self.init_weight
+                self.mask_weight = - self.init_weight
             elif (ref_value >= self.maskloss_thresh):
-                self.mask_weight = (ref_value / self.maskloss_thresh - 1) / (bound - 1) * self.init_weight
+                self.mask_weight =  (ref_value / self.maskloss_thresh -1)  / (bound - 1) * self.init_weight
             else:
-                self.mask_weight =  - (self.maskloss_thresh / ref_value - 1)  / (bound - 1) * self.init_weight
+                self.mask_weight = - (self.maskloss_thresh / ref_value - 1)  / (bound - 1) * self.init_weight
                 
         return self.mask_weight
 

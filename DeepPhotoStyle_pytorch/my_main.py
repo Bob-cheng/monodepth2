@@ -66,6 +66,8 @@ if __name__ == '__main__':
     ap.add_argument("--mask-step", "-ms", default=1, type=int, help="minimum mask unite size for mask optimization")
     ap.add_argument("--depth-model", "-dm", type=str, default='monodepth2', choices=['monodepth2', 'depthhints','manydepth'], help="select the depth model to be attacked")
     ap.add_argument("--random-seed", '-seed', type=int, default=17, help="random seed in optimization")
+    ap.add_argument("--log-postfix", '-lp', type=str, default='', help="log folder postfix")
+    ap.add_argument("--late-start", action='store_true', help="start mask opimize from the second phase")
 
     args = vars(ap.parse_args())
 
@@ -88,6 +90,10 @@ if __name__ == '__main__':
     car_img_resize, car_mask_np, paint_mask_np = process_car_img(args['vehicle'], paintMask_no=args['paint_mask'], mask_step=args['mask_step'])
     scene_img_crop = process_scene_img('VW01.png')
     test_scene_img = process_scene_img('VW01.png')
+
+    # scene_img_crop = process_scene_img('000001.png')
+    # test_scene_img = process_scene_img('000001.png')
+    
 
     print('Computing Laplacian matrix of content image')
     content_image_path = os.path.join(gen_content_path, content_image_name)
@@ -117,7 +123,9 @@ if __name__ == '__main__':
     test_scene_img = utils.image_to_tensor(test_scene_img)[:3, :, :].unsqueeze(0).to(config.device0, torch.float)
 
     # Logger
-    log_dir = os.path.join(os.path.abspath(os.getcwd()), 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname())
+    # log_dir = os.path.join(os.path.abspath(os.getcwd()), 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname())
+    # log_dir = os.path.join('/data/cheng443/depth_atk', 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname() + '_CH')
+    log_dir = os.path.join('/data/cheng443/depth_atk', 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + args['log_postfix'])
     os.makedirs(log_dir)
     logger = SummaryWriter(log_dir)
     logger.add_text('args/CLI_params', str(args), 0)
@@ -170,7 +178,7 @@ if __name__ == '__main__':
     paint_mask_tensor = utils.get_mask_target(args['paint_mask'], car_mask_tensor.size(), paint_mask_init)
     output = utils.texture_to_car_size(output, car_img.size())
     adv_car_output = output * paint_mask_tensor.unsqueeze(0) + car_img * (1-paint_mask_tensor.unsqueeze(0))
-    adv_scene_out, car_scene_out, _ , paint_scene_output= attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"],paint_mask_tensor)
+    adv_scene_out, car_scene_out, scene_car_mask , scene_paint_mask= attach_car_to_scene(test_scene_img, adv_car_output, car_img, car_mask_tensor, args["batch_size"],paint_mask_tensor,args['vehicle'])
     # utils.save_pic(adv_scene_out, f'adv_scene_output')
     
     utils.save_pic(adv_scene_out[[0]], f'adv_scene_output', log_dir=log_dir)
