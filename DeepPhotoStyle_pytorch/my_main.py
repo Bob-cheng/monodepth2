@@ -56,6 +56,7 @@ if __name__ == '__main__':
     ap.add_argument("--tv-weight",      "-tw", default=0.0001,   type=float, help="Transform variant weight")
     ap.add_argument("--rl-weight",      "-rw", default=1,        type=float, help="Reality weight")
     ap.add_argument("--adv-weight",     "-aw", default=1000000,  type=float, help="Adversarial weight")
+    ap.add_argument("--epsilon",     "-eps", default=0.1,  type=float, help="epsilon for l1-norm")
     ap.add_argument("--mask-weight", "-mw", default=1, type=float, help='weight for paint mask')
     ap.add_argument("--l1-weight", "-l1w", default=1, type=float, help="l1 loss weight for perterbation")
     ap.add_argument("--steps",  default=3000, type=int, help="total training steps")
@@ -65,9 +66,11 @@ if __name__ == '__main__':
     ap.add_argument("--random-scene", "-rs", action='store_true', help="Test whether we use different scene to train")
     ap.add_argument("--mask-step", "-ms", default=1, type=int, help="minimum mask unite size for mask optimization")
     ap.add_argument("--depth-model", "-dm", type=str, default='monodepth2', choices=['monodepth2', 'depthhints','manydepth'], help="select the depth model to be attacked")
+    ap.add_argument("--adv-type", "-at", type=str, required=True, choices=['disp', 'depth'], help="select the adv loss type")
     ap.add_argument("--random-seed", '-seed', type=int, default=17, help="random seed in optimization")
     ap.add_argument("--log-postfix", '-lp', type=str, default='', help="log folder postfix")
     ap.add_argument("--late-start", action='store_true', help="start mask opimize from the second phase")
+    ap.add_argument("--baseline", '-bl', type=str, default='proposed',choices=['baseline', 'proposed'], help="Baseline or proposed method")
 
     args = vars(ap.parse_args())
 
