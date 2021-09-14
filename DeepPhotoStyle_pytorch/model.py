@@ -492,11 +492,12 @@ def mask_loss_fucntion2(mk_init, car_mask, mask_weight):
     loss= ((mk_init[1] - mk_init[0]) + (mk_init[3] - mk_init[2])) / (H + W) * mask_weight
     return loss
 
-def get_mean_depth_diff(disp1, disp2, scene_car_mask):
+def get_mean_depth_diff(adv_disp1, ben_disp2, scene_car_mask):
     scaler=5.4
-    dep1=torch.clamp(disp_to_depth(torch.abs(disp1),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
-    dep2=torch.clamp(disp_to_depth(torch.abs(disp2),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
-    mean_depth_diff = torch.sum(torch.abs(dep1-dep2))/torch.sum(scene_car_mask)
+    dep1_adv=torch.clamp(disp_to_depth(torch.abs(adv_disp1),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
+    dep2_ben=torch.clamp(disp_to_depth(torch.abs(ben_disp2),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
+    # mean_depth_diff = torch.sum(torch.abs(dep1_adv-dep2_ben))/torch.sum(scene_car_mask)
+    mean_depth_diff = torch.sum(dep1_adv-dep2_ben)/torch.sum(scene_car_mask)
     return mean_depth_diff
 
 def get_affected_ratio(disp1, disp2, scene_car_mask):
