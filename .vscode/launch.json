@@ -22,7 +22,28 @@
             "cwd": "${workspaceFolder}/",
             "justMyCode": false,
             "console": "integratedTerminal",
-            "env": {"CUDA_VISIBLE_DEVICES": "5"}
+            "env": {"CUDA_VISIBLE_DEVICES": "6"}
+        },
+        {
+            "name": "Bob Attack Validator",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/pseudo_lidar/attack_validator_Bob.py",
+            "cwd": "${workspaceFolder}/",
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "env": {"CUDA_VISIBLE_DEVICES": "6"}
+        },
+        {
+            "name": "Pointpillar Pipeline",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/Open3D_ML/scripts/run_pipeline.py",
+            "args": ["-c", "ml3d/configs/pointpillars_kitti.yml", "torch","--split", "train", "--pipeline", "ObjectDetection"],
+            "cwd": "${workspaceFolder}/Open3D_ML",
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "env": {"CUDA_VISIBLE_DEVICES": "7"}
         }
     ]
 }

@@ -350,8 +350,9 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     # compose adversarial image
     input_img_resize = utils.texture_to_car_size(input_img, car_img.size())
     adv_car_image = input_img_resize * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
-    # adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene_Robustness_training(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
-    adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
+    adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene_Robustness_training(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
+    # adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
+    # adv_scene, car_scene, scene_obj_mask, scene_paint_mask = attach_car_to_scene_validator(scene_img, adv_car_image, car_img, car_mask, batch_size, paint_mask,args['vehicle'])
 
     scene_mask=scene_paint_mask if args['baseline'] == 'baseline' else scene_obj_mask
 
@@ -392,8 +393,12 @@ def get_adv_loss(input_img, car_img, scene_img, paint_mask, car_mask, depth_mode
     # test=loss_fun2(adv_depth,scene_obj_mask)
     if args['adv_type'] == 'depth':
         adv_loss = -1*get_mean_depth_diff(adv_depth, car_depth, scene_mask)
-    else:
+    elif args['adv_type'] == 'disp':
         adv_loss = loss_fun2(adv_depth,scene_mask)
+    elif args['adv_type'] == 'max_disp':
+        adv_loss = loss_fun(torch.max(adv_depth * scene_mask, dim=3)[0], torch.zeros(1).float().to(config.device0))
+    elif args['adv_type'] == 'ratio_depth':
+        adv_loss = -1*get_affected_ratio(adv_depth, car_depth, scene_mask)
     return adv_loss , mean_depth_diff
 
 def get_lp_norm_loss(input_img, content_img, paint_mask):
@@ -473,7 +478,7 @@ def get_mask_ratio(paint_mask,mask, mk_init=None):
     # loss = torch.mean(torch.abs(mapped_mask))
     if mk_init == None:
         ratio = torch.sum(paint_mask)/torch.sum(mask)
-    else:
+    elif len(mk_init.size()) == 1:
         ratio = (mk_init[1] - mk_init[0]) * (mk_init[3] - mk_init[2]) / torch.sum(mask)
     return ratio
 
@@ -489,7 +494,14 @@ def mask_loss_fucntion2(mk_init, car_mask, mask_weight):
     # this loss function can avoid influence of rectangular shape making each edge have same weight
     # which is required in single edge optimization each time
     C, H, W = car_mask.size()
-    loss= ((mk_init[1] - mk_init[0]) + (mk_init[3] - mk_init[2])) / (H + W) * mask_weight
+    loss = 0
+    if len(mk_init.size()) == 1:
+        loss= ((mk_init[1] - mk_init[0]) + (mk_init[3] - mk_init[2])) / (H + W) * mask_weight
+    elif len(mk_init.size()) == 2: # require the mask to be horizontal
+        num_masks = mk_init.size()[0]
+        for i in range(num_masks):
+            loss += ((mk_init[i][1] - mk_init[i][0]) + (mk_init[i][3] - mk_init[i][2]))
+        loss = loss / (H + num_masks * W) * mask_weight
     return loss
 
 def get_mean_depth_diff(adv_disp1, ben_disp2, scene_car_mask):
@@ -504,8 +516,41 @@ def get_affected_ratio(disp1, disp2, scene_car_mask):
     scaler=5.4
     dep1=torch.clamp(disp_to_depth(torch.abs(disp1),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
     dep2=torch.clamp(disp_to_depth(torch.abs(disp2),0.1,100)[1]*scene_car_mask.unsqueeze(0)*scaler,max=50)
-    affected_ratio = torch.sum(torch.abs(dep1-dep2)>10)/torch.sum(scene_car_mask)
+    affected_ratio = torch.sum((dep1-dep2).clamp(0, 1))/torch.sum(scene_car_mask)
     return affected_ratio
+
+def edge_based_update(paint_mask_init, mask_optimizer, run):
+    if len(paint_mask_init.size()) == 1:
+        mask_grads = paint_mask_init.grad.clone().detach()
+        mask_grads[0] = - mask_grads[0]
+        mask_grads[2] = - mask_grads[2]
+        optim_idxs = []
+        optim_idxs.append(torch.max(mask_grads, dim=0)[1].item()) ## for one edge training
+        # optim_idxs.extend([0,1,2,3]) ## for 4 edge training
+        if run[0] % 20 == 0:
+            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        paint_mask_init_old = paint_mask_init.clone()
+        mask_optimizer.step()
+        with torch.no_grad():
+            for pm_idx in range(4):
+                if pm_idx not in optim_idxs:
+                    paint_mask_init[pm_idx] = paint_mask_init_old[pm_idx]
+    else:
+        num_masks = paint_mask_init.size()[0]
+        optim_idxs = []
+        mask_grads = paint_mask_init.grad.clone().detach()
+        mask_grads[:, 0] = - mask_grads[:, 0]
+        mask_grads[:, 2] = - mask_grads[:, 2]
+        optim_idxs = torch.max(mask_grads, dim=1)[1].unsqueeze(1)
+        if run[0] % 20 == 0:
+            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        paint_mask_init_old = paint_mask_init.clone()
+        mask_optimizer.step()
+        with torch.no_grad():
+            for mk_idx in range(num_masks):
+                for pm_idx in range(4):
+                    if pm_idx not in optim_idxs[mk_idx]:
+                        paint_mask_init[mk_idx][pm_idx] = paint_mask_init_old[mk_idx][pm_idx]
 
 def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normalization_std,
                        content_img, style_img, input_img, car_img, scene_img_1, test_scene_img_1,
@@ -537,11 +582,13 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
     # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
     if args['vehicle']=='BMW.png':
-        mask_loss_thresh = 0.096934 #1/9
+        mask_loss_thresh = 1/9 #0.096934 #1/9
     elif args['vehicle']=='Pedestrain2.png':
         mask_loss_thresh = 0.21 #1/3
     elif args['vehicle']=='TrafficBarrier2.png':
         mask_loss_thresh = 1/6
+    else:
+        mask_loss_thresh = 1/9
     target_steps = num_steps if args['l1_norm'] else num_steps//2
     mwUpdater = MaskWeightUpdater(mask_weight, mask_loss_thresh, init_mask_ratio, target_steps)
 
@@ -565,7 +612,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     mask_optimizer = optim.Adam([paint_mask_init.requires_grad_()], lr=1, betas=(0.5, 0.9)) # lr=1 for single edge optim, 0.1 for four edge optim
     optimizer = get_input_optimizer([input_img], learning_rate, args)
     LR_decay = PolynomialLRDecay(optimizer, num_steps//2, learning_rate/2, 0.9)
-    if args['paint_mask'] != '-2' or args['late_start']:
+    if int(args['paint_mask']) >= -1 or args['late_start']:
         run_mask_optimize = False
     else:
         run_mask_optimize = True
@@ -645,7 +692,8 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
             
             if run_mask_optimize:
-                mask_ratio = get_mask_ratio(paint_mask,car_mask, paint_mask_init)
+                # mask_ratio = get_mask_ratio(paint_mask,car_mask, paint_mask_init)
+                mask_ratio = get_mask_ratio(paint_mask,car_mask)
                 mask_weight = mwUpdater.step(mask_ratio.item())
                 # mask_loss= mask_loss_fucntion(mask_loss,mask_loss_thresh,adv_loss)
                 # mask_loss= mask_loss_fucntion(mask_ratio,mask_loss_thresh,mask_weight) # use this in all edges optimization
@@ -694,7 +742,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                 input_img.data = best_input
                 best_loss = 1e10
                 # LR_decay.step(0)
-                if args['paint_mask'] == '-2' and args['late_start']: # late start code
+                if int(args['paint_mask']) <= -2 and args['late_start']: # late start code
                     run_mask_optimize = True
                     print("start optimizing mask")
                     
@@ -708,20 +756,9 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     print(run[0], "Stop optimizing mask")
                 else:            
                     # mask_optimizer.step()
-                    mask_grads = torch.abs(paint_mask_init.grad)
-                    optim_idxs = []
-                    optim_idxs.append(torch.max(mask_grads, dim=0)[1].item())
-                    # optim_idxs.append(torch.max(mask_grads[0:2], dim=0)[1].item())
-                    # optim_idxs.append(torch.max(mask_grads[2:4], dim=0)[1].item() + 2)
-                    if run[0] % 20 == 0:
-                        print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
-                    paint_mask_init_old = paint_mask_init.clone()
-                    mask_optimizer.step()
-                    with torch.no_grad():
-                        for pm_idx in range(4):
-                            if pm_idx not in optim_idxs:
-                                paint_mask_init[pm_idx] = paint_mask_init_old[pm_idx]
+                    edge_based_update(paint_mask_init, mask_optimizer, run)
             
+
             run[0] += 1
             if run[0] % 20 == 0 or run[0] == 1:
                 print("run {}/{}:".format(run, num_steps))
@@ -799,9 +836,10 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
         if args['l1_norm']:
             with torch.no_grad():
                 epsilon = args['epsilon']
-                diff = input_img - content_img
-                diff = torch.clamp(diff, -epsilon, epsilon)
-                input_img.data = content_img + diff
+                if epsilon > 0:
+                    diff = input_img - content_img
+                    diff = torch.clamp(diff, -epsilon, epsilon)
+                    input_img.data = content_img + diff
         
     # a last corrention...
     # input_img.data = best_input

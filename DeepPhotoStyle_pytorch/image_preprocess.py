@@ -90,7 +90,8 @@ def process_car_img(img_name, paintMask_no : str, mask_step: int = 1):
     ext_split = os.path.splitext(img_name)
     car_img_resize, w, h = process_img(img_name, car_img_width, 'car')
     car_mask_np = process_mask(ext_split[0] + '_CarMask' + ext_split[1], w, h, 'car')
-    if paintMask_no == '-1' or paintMask_no == '-2' : # half mask
+    # if paintMask_no == '-1' or paintMask_no == '-2' : # half mask
+    if int(paintMask_no) < 0: # half mask
         mask_shape = [ (i // mask_step) for i in car_mask_np.shape ]
         # paint_mask_np = np.random.random(mask_shape)
         paint_mask_np = np.ones(mask_shape) * 0.5

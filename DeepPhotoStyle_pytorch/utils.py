@@ -84,7 +84,7 @@ def extract_patch(adv_car, paint_mask):
     for i in range(H):
         has_one = False
         for j in range(W):
-            if abs(paint_mask_2D[i, j] - 1)  < 1e-10:
+            if abs(paint_mask_2D[i, j] - 1)  < 0.5:
                 has_one = True
                 if not last_row:
                     h_range.append(i)
@@ -99,7 +99,7 @@ def extract_patch(adv_car, paint_mask):
     for j in range(W):
         has_one = False
         for i in range(H):
-            if abs(paint_mask_2D[i, j] - 1)  < 1e-10:
+            if abs(paint_mask_2D[i, j] - 1)  < 0.5:
                 has_one = True
                 if not last_col:
                     w_range.append(j)
@@ -197,6 +197,8 @@ def make_square_mask(mask_size, boarders):
 def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
     if mask_type == '-2':
         paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]-40]).float().to(config.device0).requires_grad_(True)
+    if mask_type == '-3':
+        paint_mask_init = torch.tensor([[0, full_size[2], 0, full_size[1]//2], [0, full_size[2], full_size[1]//2, full_size[1]]]).float().to(config.device0).requires_grad_(True)
     elif mask_type == '-1':
         paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
         paint_mask_init = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
@@ -207,6 +209,11 @@ def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
 def get_mask_target(mask_type, full_size, mask_source: torch.Tensor):
     if mask_type == '-2':
         paint_mask = make_square_mask(full_size, mask_source)
+    if mask_type == '-3':
+        paint_mask0 = make_square_mask(full_size, mask_source[0])
+        paint_mask1 = make_square_mask(full_size, mask_source[1])
+        paint_mask = paint_mask0 + paint_mask1
+        paint_mask.clamp_(0, 1)
     elif mask_type == '-1':
         paint_mask = from_inf_to_mask(mask_source, full_size)
     else:

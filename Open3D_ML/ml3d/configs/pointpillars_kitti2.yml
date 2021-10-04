@@ -1,13 +1,13 @@
 dataset:
   name: KITTI
-  dataset_path: /data/cheng443/kitti/object/
-  cache_dir: /data/cheng443/open3d_ml/logs/cache
+  dataset_path: /data/cheng443/kitti/object2/
+  cache_dir: /data/cheng443/open3d_ml/logs/cache2
   # cache_dir: ./logs/cache
   steps_per_epoch_train: 5000
 
 model:
   name: PointPillars
-  ckpt_path: # path/to/your/checkpoint
+  ckpt_path: /data/cheng443/open3d_ml/logs/PointPillars_KITTI_torch/checkpoint/ckpt_00010.pth
 
   batcher: "ignore"
 
@@ -91,9 +91,9 @@ pipeline:
   save_ckpt_freq: 5
   max_epoch: 200
   # main_log_dir: ./logs
-  main_log_dir: /data/cheng443/open3d_ml/logs
+  main_log_dir: /data/cheng443/open3d_ml/logs2
   # train_sum_dir: train_log
-  train_sum_dir: /data/cheng443/open3d_ml/train_log
+  train_sum_dir: /data/cheng443/open3d_ml/train_log2
   grad_clip_norm: 2
 
   optimizer:

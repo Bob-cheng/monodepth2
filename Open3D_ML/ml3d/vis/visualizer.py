@@ -233,6 +233,9 @@ class DataModel(Model):
             return
 
         self.create_point_cloud(self._name2srcdata[name])
+        if 'bounding_boxes' in self._name2srcdata:
+            self.bounding_box_data.append(
+                Model.BoundingBoxData(name, self._name2srcdata['bounding_boxes']))
 
     def unload(self, name):
         """Unload a pointcloud."""

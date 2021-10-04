@@ -1,6 +1,7 @@
 # To add a new cell, type '# %%'
 # To add a new markdown cell, type '# %% [markdown]'
 # %%
+from builtins import print
 import open3d as o3d
 # from open3d.web_visualizer import draw
 
@@ -16,9 +17,11 @@ import matplotlib.pyplot as plt
 
 def load_parameters(ckpt_folder, pipeline):
     os.makedirs(ckpt_folder, exist_ok=True)
-    ckpt_path = ckpt_folder + "pointpillars_kitti_202012221652utc.pth"
+    # ckpt_path = ckpt_folder + "pointpillars_kitti_202012221652utc.pth"
+    ckpt_path = ckpt_folder + "ckpt_00070.pth"
     pointpillar_url = "https://storage.googleapis.com/open3d-releases/model-zoo/pointpillars_kitti_202012221652utc.pth"
     if not os.path.exists(ckpt_path):
+        print('check point not found, download online')
         cmd = "wget {} -O {}".format(pointpillar_url, ckpt_path)
         os.system(cmd)
 
@@ -31,25 +34,53 @@ def make_obj_pred(pipeline, pc_np):
     result = pipeline.run_inference(data)[0]
     return result
 
-def get_pointpillars_pipeline():
-    cfg_file = "/home/cheng443/projects/Monodepth/monodepth2_bob/Open3D_ML/ml3d/configs/pointpillars_kitti.yml"
+def get_pointpillars_pipeline(pretrain=True):
+    cfg_file = "/home/cheng443/projects/Monodepth/Monodepth2_official/Open3D_ML/ml3d/configs/pointpillars_kitti.yml"
     cfg = _ml3d.utils.Config.load_from_file(cfg_file)
     model = ml3d.models.PointPillars(**cfg.model)
     dataset = ml3d.datasets.KITTI(cfg.dataset.pop('dataset_path', None), **cfg.dataset)
     pipeline = ml3d.pipelines.ObjectDetection(model, dataset=dataset, device="gpu", **cfg.pipeline)
-    pipeline = load_parameters('/home/cheng443/projects/Monodepth/monodepth2_bob/Open3D_ML/logs', pipeline)
+    if pretrain:
+        # pipeline = load_parameters('/home/cheng443/projects/Monodepth/monodepth2_bob/Open3D_ML/logs', pipeline)
+        pipeline = load_parameters('/data/cheng443/open3d_ml/logs/PointPillars_KITTI_torch/checkpoint/', pipeline)
     return pipeline, model, dataset
 
-def visualize_frame(i, pc_np, bboxes=None):
-    vis_data = []
-    for i, pc in enumerate(pc_np):
-        vis_data.append({
-            'name': "{:0>5d}".format(i),
-            'points': pc,
-        })
+def visualize_dataset(dataset, split, indices, lut=None):
     o3d.visualization.webrtc_server.enable_webrtc()
     vis = ml3d.vis.Visualizer()
+    if lut != None:
+        vis.set_lut("labels", lut)
+        vis.set_lut("pred", lut)
+    vis.visualize_dataset(dataset, split, indices)
+
+def visualize_frame(i, pc_np, bboxes=None, bboxes_array=None, lut=None):
+    vis_data = []
+    for i, pc in enumerate(pc_np):
+        if bboxes_array == None:
+            vis_data.append({
+                'name': "{:0>5d}".format(i),
+                'points': pc
+            })
+        else:
+            vis_data.append({
+                'name': "{:0>5d}".format(i),
+                'points': pc,
+                'bounding_boxes': bboxes_array[i]
+            })
+    o3d.visualization.webrtc_server.enable_webrtc()
+    vis = ml3d.vis.Visualizer()
+    if lut != None:
+        vis.set_lut("labels", lut)
+        vis.set_lut("pred", lut)
     vis.visualize(vis_data, bounding_boxes=bboxes)
+
+def visulize_data(data, lut=None):
+    o3d.visualization.webrtc_server.enable_webrtc()
+    vis = ml3d.vis.Visualizer()
+    if lut != None:
+        vis.set_lut("labels", lut)
+        vis.set_lut("pred", lut)
+    vis.visualize(data)
 
 def draw_z_histogram(pc_np, name):
     plt.figure()

@@ -145,7 +145,7 @@ def attach_car_to_scene_Robustness_training(scene_img, adv_car_img, car_img, car
     car_mask:      1 * H * W
     """
     _, _, H, W = adv_car_img.size()
-    i=random.randint(0,500)
+    i=random.randint(0,300)
     if scene_img.size()[0] == batch_size:
         adv_scene = scene_img.clone()
         car_scene = scene_img.clone()
