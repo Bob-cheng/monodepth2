@@ -9,7 +9,7 @@ from torchvision.transforms import transforms
 sys.path.append(".")
 from DeepPhotoStyle_pytorch.depth_model import import_depth_model
 import random
-from preprocessing import kitti_util
+from preprocessing.kitti_util import Calibration,point_cloud_adjustment
 from Open3D_ML.open3d_visualization import get_pointpillars_pipeline, make_obj_pred, visualize_frame, visualize_dataset, visulize_data
 from DeepPhotoStyle_pytorch.dataLoader import DataLoader, KittiLoader
 from PIL import Image as pil
@@ -151,7 +151,7 @@ def train_pointpillar_pipeline():
 
 
 def generate_point_cloud(disp_map, calib_path, output_path, max_height, is_sparse=False):
-    calib = kitti_util.Calibration(calib_path)
+    calib = Calibration(calib_path)
     disp_map = (disp_map).astype(np.float32)
     # print(disp_map.shape)
     lidar = project_disp_to_points(calib, disp_map, max_height)
@@ -166,7 +166,8 @@ def generate_point_cloud(disp_map, calib_path, output_path, max_height, is_spars
         np.save(out_fn, lidar)
     return lidar
 
-def compose_vis_from_dir(lidar_dir, pipeline):
+
+def compose_vis_from_dir(lidar_dir, pipeline, frame_idx=None):
     if not os.path.isdir(lidar_dir):
         print("please give a diretory.")
         return
@@ -174,10 +175,12 @@ def compose_vis_from_dir(lidar_dir, pipeline):
     paths = sort(paths)
     all_frame = []
     for lidar_path in paths:
+        if frame_idx != None and str(frame_idx) not in lidar_path:
+            continue
         filename = os.path.splitext(os.path.basename(lidar_path))[0]
         point_cloud = np.load(lidar_path)
-        point_cloud[:, 2] -= 0.7
-        bboxes = filter_car(make_obj_pred(pipeline, point_cloud), confidence_thre=0.1)
+        point_cloud = point_cloud_adjustment(point_cloud, rot_y=5)
+        bboxes = filter_car(make_obj_pred(pipeline, point_cloud), confidence_thre=0.3)
         data = {
             'name': filename,
             'points': point_cloud,
@@ -189,7 +192,7 @@ def compose_vis_from_dir(lidar_dir, pipeline):
 
 
 
-def project_disp_to_points(calib : kitti_util.Calibration, disp, max_high):
+def project_disp_to_points(calib : Calibration, disp, max_high):
     disp[disp < 0] = 0
     mask = disp > 0
     # baseline = 0.54
@@ -225,8 +228,9 @@ def fromNumpy2laspy(lidar, out_path): # the output file should end with ".las"
 
 def filter_car(bboxes, confidence_thre=0.3):
         output = []
+        filter_catigories = ['Car']
         for bbox_obj in bboxes:
-            if bbox_obj.label_class == 'Car' and bbox_obj.confidence > confidence_thre:
+            if bbox_obj.label_class in filter_catigories and bbox_obj.confidence > confidence_thre:
                 output.append(bbox_obj)
         return output
 
@@ -492,7 +496,7 @@ class AttackValidator():
             scale_upper = 0.5
             scale_lower = 0.4
             # scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
-            scale=0.35 if self.carname != 'p2' else 0.13
+            scale=0.37 if self.carname != 'p2' else 0.13
             # Do some transformation on the adv_car_img together with car_mask
             trans_seq = transforms.Compose([ 
                 # transforms.RandomRotation(degrees=3),
@@ -514,8 +518,9 @@ class AttackValidator():
             left_range = W_Sce - W_Car
             bottom_range = int((H_Sce - H_Car)/2)
 
-            bottom_height = int(bottom_range - scale * max(bottom_range +120 , 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
-            left =  420 # random.randint(50, left_range-50)
+            # bottom_height = int(bottom_range - scale * max(bottom_range +120 , 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
+            bottom_height = 0
+            left =  400 # random.randint(50, left_range-50)
             h_index = H_Sce - H_Car - bottom_height
             w_index = left
             h_range = slice(h_index, h_index + H_Car)
@@ -545,8 +550,8 @@ if __name__ == '__main__':
     save_path = '/data/cheng443/depth_atk'
     setup_seed(18)
     car_name = 'BMW'
-    # adv_no = 'highlight2'
-    adv_no = '102'
+    adv_no = 'style_lambda1'
+    # adv_no = '102'
     
     model='monodepth2'
     depth_model = import_depth_model((1024, 320), model).to(torch.device("cuda")).eval()
@@ -555,21 +560,21 @@ if __name__ == '__main__':
     scene_name='000027'
     
     ## process folder data
-    lidar_dir = '/data/cheng443/depth_atk/videos/10-01-2021/IMG_3604_Processed/Lidar'
-    validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
-    all_frames = compose_vis_from_dir(lidar_dir, validator.pipeline)
-    visulize_data(all_frames)
-    exit(0)
+    # lidar_dir = '/data/cheng443/depth_atk/videos/09-30-2021/IMG_3596_Processed/Lidar'
+    # validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
+    # all_frames = compose_vis_from_dir(lidar_dir, validator.pipeline, frame_idx=None)
+    # visulize_data(all_frames)
+    # exit(0)
     
 
     ## process single data                                                         
     validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
-    validator.get_depth_data(is_sparse=False)
+    validator.get_depth_data(is_sparse=True)
     # validator.do_patch_cross_check(['Sedan_Back', 'SUV_Back', 'Black'], 'BMW_001')
     validator.run_obj_det_model()
     # validator.vis_frame('adv')
-    fromNumpy2laspy(validator.ben_scene_lidar, validator.ben_pc_path + '.las')
-    fromNumpy2laspy(validator.adv_scene_lidar, validator.adv_pc_path + '.las')
+    # fromNumpy2laspy(validator.ben_scene_lidar, validator.ben_pc_path + '.las')
+    # fromNumpy2laspy(validator.adv_scene_lidar, validator.adv_pc_path + '.las')
     validator.vis_frame('adv')
     
     ## process multiple data
@@ -578,7 +583,7 @@ if __name__ == '__main__':
     # for val in sorted(kitti_labels.keys()):
     #     lut.add_label(kitti_labels[val], val)
     # from pseudo_lidar.eval_scene_indices import scene_indices
-    # scene_indices = [210]
+    # scene_indices = [72]
     # ben_frames = []
     # adv_frames = []
     # all_frames = []

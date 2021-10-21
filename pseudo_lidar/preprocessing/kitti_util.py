@@ -6,6 +6,19 @@ Date: September 2017
 from __future__ import print_function
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+def point_cloud_adjustment(point_cloud: np.ndarray, rot_x=0, rot_y=0, rot_z=0, mov_x=0, mov_y=0, mov_z=0):
+    """
+    velodyne coord:
+    front x, left y, up z
+    """
+    r_mat: np.ndarray = R.from_euler('ZYX', [rot_z, rot_y, rot_x], degrees=True).as_matrix()
+    point_cloud_rot = np.matmul(point_cloud[:, :3], r_mat.transpose())
+    point_cloud_mov = point_cloud_rot + [mov_x, mov_y, mov_z]
+    point_cloud[:, :3] = point_cloud_mov
+    return point_cloud
+
 
 
 class Calibration(object):

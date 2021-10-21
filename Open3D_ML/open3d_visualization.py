@@ -80,7 +80,11 @@ def visulize_data(data, lut=None):
     if lut != None:
         vis.set_lut("labels", lut)
         vis.set_lut("pred", lut)
-    vis.visualize(data)
+    if len(data) == 1:
+        vis.visualize(data, bounding_boxes=data[0]['bounding_boxes'])
+    else:
+        vis.visualize(data)
+    
 
 def draw_z_histogram(pc_np, name):
     plt.figure()
