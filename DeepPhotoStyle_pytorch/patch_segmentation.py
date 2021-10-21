@@ -3,10 +3,10 @@ from PIL import Image as pil
 import os
 import math
 
-folder_name = 'BMW_mono_rob_disp_-2_X'
+folder_name = 'mono_car_25_Rob_disp/patch2'
 
 patch_image_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/asset/generated_patch/{}/full_image.png".format(folder_name)
-parts = [2,3]
+parts = [1,6]
 
 #%%
 

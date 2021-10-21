@@ -71,6 +71,7 @@ if __name__ == '__main__':
     ap.add_argument("--log-postfix", '-lp', type=str, default='', help="log folder postfix")
     ap.add_argument("--late-start", action='store_true', help="start mask opimize from the second phase")
     ap.add_argument("--baseline", '-bl', type=str, default='proposed',choices=['baseline', 'proposed'], help="Baseline or proposed method")
+    ap.add_argument("--style-lambda", '-sl',  default=1,   type=float, help="Style transfer wrap weight")
 
     args = vars(ap.parse_args())
 

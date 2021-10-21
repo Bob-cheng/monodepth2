@@ -22,7 +22,7 @@
             "cwd": "${workspaceFolder}/",
             "justMyCode": false,
             "console": "integratedTerminal",
-            "env": {"CUDA_VISIBLE_DEVICES": "6"}
+            "env": {"CUDA_VISIBLE_DEVICES": "4"}
         },
         {
             "name": "Bob Attack Validator",

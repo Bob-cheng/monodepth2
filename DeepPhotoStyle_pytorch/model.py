@@ -567,6 +567,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     num_steps = args['steps']
     adv_weight = args['adv_weight']
     learning_rate = args["learning_rate"]
+    style_lambda = args['style_lambda']
 
     if args['random_scene']:
         kitti_loader_train = KittiLoader(mode='train',  train_list='trainval.txt', val_list='val.txt')
@@ -582,7 +583,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
     # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
     if args['vehicle']=='BMW.png':
-        mask_loss_thresh = 1/9 #0.096934 #1/9
+        mask_loss_thresh = 2/9 #0.096934 #1/9
     elif args['vehicle']=='Pedestrain2.png':
         mask_loss_thresh = 0.21 #1/3
     elif args['vehicle']=='TrafficBarrier2.png':
@@ -717,15 +718,15 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     if manual_grad:
                         # Realistic loss relate sparse matrix computing, 
                         # which do not support autogard in pytorch, so we compute it separately.
-                        loss = style_score + content_score + tv_score + adv_loss + mask_loss# + rl_score
+                        loss = style_lambda * (style_score + content_score + tv_score) + adv_loss + mask_loss# + rl_score
                         loss.backward()
                         input_img.grad += part_grid
                         loss = loss + rl_score
                     else:
-                        loss = style_score + content_score + tv_score + adv_loss + rl_score + mask_loss
+                        loss = style_lambda * (style_score + content_score + tv_score + rl_score) + adv_loss + mask_loss
                         loss.backward()
                 else:
-                    loss = style_score + content_score + tv_score + adv_loss + mask_loss
+                    loss = style_lambda * (style_score + content_score + tv_score) + adv_loss + mask_loss
                     loss.backward()
 
             if loss < best_loss and run[0] > 1000:

@@ -70,12 +70,17 @@ def process_dir(depth_model, input_dir, proc_range=None):
     paths = glob.glob(os.path.join(input_dir, '*.{}'.format('png')))
     paths = sort(paths)
      #IMG_3595: b 150 side 400/200 || IMG_3603: b 250 side 400/200 || IMG_3606/IMG_3607/3609/3604/3608: b 200 side 100/500
+     #IMG_3596: b 170 side 400/200
+     #IMG_3604/3606/3608/3607/3603: b 230 side 100/500
      #IMG_3611: b 100 side 0/0
      #IMG_3625: b 280 side 350/350
      #IMG_3624: b 250 side 300/300
      #IMG_3626: b 250 side 350/350
-    bottom_gap = 200           
-    side_crop = [100, 500]
+     #IMG_3651: b 120 side 200/400
+     #IMG_3652: b 150 side 200/400
+     #IMG_3657: b 200 side 200/400
+    bottom_gap = 190          
+    side_crop = [500, 300]
     with torch.no_grad():
         for idx, image_path in enumerate(paths):
             if proc_range != None and idx > proc_range:
@@ -84,8 +89,9 @@ def process_dir(depth_model, input_dir, proc_range=None):
             input_image, img_resize = read_scene_img(image_path, bottom_gap, side_crop)
             # PREDICTION
             disp_resized_np = depth_model(input_image).squeeze().cpu().numpy()
+            # Save Lidar
             name_dest_im_lidar = os.path.join(output_dir,'Lidar', output_name)
-            calib_path = "/data/cheng443/kitti/object/training/calib/003086.txt"
+            calib_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/iphone11_calib.txt"
             generate_point_cloud(disp_resized_np, calib_path, name_dest_im_lidar, 2, is_sparse=True)
 
             vmax = np.percentile(disp_resized_np, 95)
@@ -122,8 +128,8 @@ for param in depth_model.parameters():
     param.requires_grad = False
 
 #%%
-input_dir = "/data/cheng443/depth_atk/videos/10-01-2021/IMG_3604"
-process_dir(depth_model, input_dir, proc_range=1)
+input_dir = "/data/cheng443/depth_atk/videos/09-30-2021/IMG_3596"
+process_dir(depth_model, input_dir, proc_range=None)
 
 #%%
 exit(0)
