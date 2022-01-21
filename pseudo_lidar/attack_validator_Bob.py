@@ -24,6 +24,7 @@ import laspy
 import glob
 from numpy.core.fromnumeric import sort
 from open3d.ml.vis import LabelLUT, Visualizer
+from simple_defence import Magnet_defence, bitdepth_defense, gaussian_noise, jpeg_defense, blurring_defense
 
 kitti_labels = {
     0: 'unlabeled',
@@ -190,8 +191,6 @@ def compose_vis_from_dir(lidar_dir, pipeline, frame_idx=None):
     return all_frame
 
 
-
-
 def project_disp_to_points(calib : Calibration, disp, max_high):
     disp[disp < 0] = 0
     mask = disp > 0
@@ -311,7 +310,21 @@ class AttackValidator():
         # print("ben car size: {} \n adv car size: {} \n scene image size: {} \n car mask size: {}".format(
         #     self.ben_car_tensor.size(), self.adv_car_tensor.size(), self.scene_tensor.size(), self.car_mask_tensor.size()))
     
-    def get_depth_data(self, is_sparse):
+    def run_defence_on_image(self, defence_args, rgb_img):
+        if defence_args['type'] == "bitdepth":
+            return bitdepth_defense(rgb_img, depth=defence_args['depth'])
+        elif defence_args['type'] == "jpeg_compress":
+            return jpeg_defense(rgb_img, quality=defence_args['quality'])
+        elif defence_args['type'] == "smooth":
+            return blurring_defense(rgb_img, ksize=defence_args['size'])
+        elif defence_args['type'] == "guassian":
+            return gaussian_noise(rgb_img, std=defence_args['std'])
+        elif defence_args['type'] == "autoencoder":
+            magnet = Magnet_defence(defence_args['model_type'])
+            return magnet.magnet_defense(rgb_img)
+
+    
+    def get_depth_data(self, is_sparse, defence_args=None):
         self.load_imgs()
         trans = transforms.Resize([int(self.scene_size[1]), int(self.scene_size[0])])
         ## scale with adv car
@@ -322,6 +335,10 @@ class AttackValidator():
         ## scale scene only
         self.scene_tensor = trans(self.scene_tensor)
         scene_car_mask=self.attach_car_to_scene(1)
+
+        if defence_args!=None:
+            self.ben_scene_tensor = self.run_defence_on_image(defence_args, self.ben_scene_tensor)
+            self.adv_scene_tensor = self.run_defence_on_image(defence_args, self.adv_scene_tensor)
 
         target_size = (self.original_size[1], self.original_size[0])
         with torch.no_grad():
@@ -340,6 +357,7 @@ class AttackValidator():
         self.scene_lidar = generate_point_cloud(scene_disp, self.calib_path, self.scene_pc_path, 2, is_sparse=is_sparse)
         pil_image,disp1,disp2 = eval_depth_diff(self.ben_scene_tensor, self.adv_scene_tensor, self.depth_model, '')
         pil_image.save(self.compare_path)
+        # print("image saved to: ", self.compare_path)
         return disp1,disp2,scene_car_mask
 
     def get_depth_data2(self,i):
@@ -544,13 +562,25 @@ class AttackValidator():
         ben_scene_img.save(self.ben_pc_path + '.png')
         return scene_car_mask
 
+def cal_mean_depth_error(disp1, disp2, scene_car_mask):
+    scaler = 5.4
+    dep1 = torch.clamp(disp_to_depth(torch.abs(torch.tensor(disp1)), 0.1, 100)[
+                        1]*scene_car_mask.unsqueeze(0).cpu()*scaler, max=100)
+    dep2 = torch.clamp(disp_to_depth(torch.abs(torch.tensor(disp2)), 0.1, 100)[
+                        1]*scene_car_mask.unsqueeze(0).cpu()*scaler, max=100)
+    mean_depth_diff = torch.sum(torch.abs(dep1-dep2)) / \
+        (torch.sum(scene_car_mask)+1)
+    return mean_depth_diff
+
 
 if __name__ == '__main__':
     generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
     save_path = '/data/cheng443/depth_atk'
     setup_seed(18)
     car_name = 'BMW'
-    adv_no = 'style_lambda1'
+    # adv_no = 'style_lambda1'
+    # adv_no = 'cloud_comp'
+    adv_no = 'Mono_1_9_Rob'
     # adv_no = '102'
     
     model='monodepth2'
@@ -565,17 +595,65 @@ if __name__ == '__main__':
     # all_frames = compose_vis_from_dir(lidar_dir, validator.pipeline, frame_idx=None)
     # visulize_data(all_frames)
     # exit(0)
+
+    ## process defence data
+    validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
+    ben_disp1,adv_disp2,scene_car_mask = validator.get_depth_data(is_sparse=True)
+    # defence_args = {
+    #     "type": "bitdepth",
+    #     "depth": 1
+    # }
+    # for q in range(10, 91, 10):
+    #     defence_args = {
+    #         "type": "jpeg_compress",
+    #         "quality":q
+    #     }
+    #     ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+    #     ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+    #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+    #     print(f"level: {q}, benign error: {ben_error}, attack error: {atk_error}")
+    
+    # for k in range(1, 36, 2):
+    #     defence_args = {
+    #         "type": "smooth",
+    #         "size":k
+    #     }
+    #     ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+    #     ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+    #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+    #     print(f"level: {k}, benign error: {ben_error}, attack error: {atk_error}")
+    
+    # for k in [0.1, 0.05, 0.02, 0.01]:
+    #     defence_args = {
+    #         "type": "guassian",
+    #         "std": k
+    #     }
+    #     ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+    #     ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+    #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+    #     print(f"level: {k}, benign error: {ben_error}, attack error: {atk_error}")
+
+    for model_type in ['param1', 'mnist', 'cifar',  'param2']:
+        defence_args = {
+            "type": "autoencoder",
+            "model_type": model_type
+        }
+        ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+        ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+        atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+        print(f"level: {model_type}, benign error: {ben_error}, attack error: {atk_error}")
+
     
 
+
     ## process single data                                                         
-    validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
-    validator.get_depth_data(is_sparse=True)
-    # validator.do_patch_cross_check(['Sedan_Back', 'SUV_Back', 'Black'], 'BMW_001')
-    validator.run_obj_det_model()
+    # validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
+    # validator.get_depth_data(is_sparse=True)
+    # validator.run_obj_det_model()
+    # # validator.vis_frame('adv')
+    # # fromNumpy2laspy(validator.ben_scene_lidar, validator.ben_pc_path + '.las')
+    # # fromNumpy2laspy(validator.adv_scene_lidar, validator.adv_pc_path + '.las')
     # validator.vis_frame('adv')
-    # fromNumpy2laspy(validator.ben_scene_lidar, validator.ben_pc_path + '.las')
-    # fromNumpy2laspy(validator.adv_scene_lidar, validator.adv_pc_path + '.las')
-    validator.vis_frame('adv')
     
     ## process multiple data
 
