@@ -13,3 +13,4 @@ pseudo_lidar/figures/GeneratedAtks/Scene/*
 pseudo_lidar/figures/GeneratedAtks/Adv_car/*
 pseudo_lidar/figures/GeneratedAtks/PointCloud/*
 train_log/*
+*.hdf5

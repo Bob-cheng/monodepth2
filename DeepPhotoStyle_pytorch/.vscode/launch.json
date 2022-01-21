@@ -15,15 +15,15 @@
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "-2", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
             //     "-sw", "1000000", "-at", "ratio_depth", "-aw", "200", "-tw", "0.0001", "-bs", "6", "-mw", "1000.0", "-dm", "monodepth2","-rw","10", 
             //     "-lp","mono_car_-2_Rob_ratio1_1_3","--random-scene","--late-start","-bl","proposed"],
-            "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "09", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
+            "args": ["-s", "BMW.png", "-c", "BMW.png", "-v", "BMW.png", "-pm", "-2", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
                 "-sw", "1000000", "-at", "disp", "-aw", "1000000", "-tw", "0.0001", "-bs", "6", "-mw", "1000.0", "-dm", "monodepth2","-rw","10",
-            "--random-scene", "-lp","mono_car_09_Rob_disp_sl_0.5", "--late-start","-bl","proposed", "-sl", "0.5"],
+                "--random-scene", "-lp","mono_car_carstyle_Rob_disp_1_9", "--late-start","-bl","proposed", "-sl", "2"],
             // "args": ["-s", "Warnning.png", "-c", "Warnning.png", "-v", "BMW.png", "-pm", "-2", "--steps", "10000", "-lr", "0.3689", "-cw", "1000", 
             //     "-sw", "1000000","-at", "max_disp", "-aw", "1000000", "-dm", "monodepth2","-rw","10", "-lp","mono_car_-2_maxdisp", "--late-start", "--random-scene"],
             // "args": ["-s", "White.png", "-c", "White.png", "-v", "BMW.png", "-pm", "09", "--mask-step", "4", "--steps", "5000", "-lr", "0.1", "-cw", "0", 
             // "-sw", "0","-at", "depth", "-aw", "10", "-tw", "0", "-l1w", "0", "-mw", "1000", "-bs", "6", "--l1-norm", "-eps", "0","-bl","baseline",
             // "--random-scene", "-dm", "monodepth2","-lp","mono_car_09_b_free"],
-            "env": {"CUDA_VISIBLE_DEVICES": "6"}
+            "env": {"CUDA_VISIBLE_DEVICES": "1"}
         },
         // {
         //     "name": "cam_train.py",
