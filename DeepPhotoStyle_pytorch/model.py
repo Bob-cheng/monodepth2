@@ -20,8 +20,6 @@ from mwUpdater import MaskWeightUpdater
 from dataLoader import KittiLoader
 import os
 
-
-
 import config
 import cv2
 import utils
@@ -583,7 +581,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
     # mask_loss_thresh = torch.sum(torch.abs(torch.ones(paint_mask.size()))).item()/16
     if args['vehicle']=='BMW.png':
-        mask_loss_thresh = 2/9 #0.096934 #1/9
+        mask_loss_thresh = 1/9 #0.096934 #1/9
     elif args['vehicle']=='Pedestrain2.png':
         mask_loss_thresh = 0.21 #1/3
     elif args['vehicle']=='TrafficBarrier2.png':
@@ -598,7 +596,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
     model, style_losses, content_losses, tv_losses = get_style_model_and_losses(cnn,
         normalization_mean, normalization_std, style_img, content_img, style_mask, content_mask, laplacian_m)
     
-    # get deepth model
+    # get depth model
     scene_size=(1024,320)
     depth_model = import_depth_model(scene_size, model_type=args['depth_model']).to(config.device0).eval()
     print('Depth_model Done!')
