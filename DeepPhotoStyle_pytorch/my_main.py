@@ -116,7 +116,7 @@ if __name__ == '__main__':
     # paint_mask_inf = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
     # paint_mask_boarders = torch.tensor([0, car_mask_tensor.size()[2], 0, car_mask_tensor.size()[1]]).float().to(config.device0).requires_grad_(True)
 
-    paint_mask_init = utils.get_mask_source(args['paint_mask'], car_mask_tensor.size(), paint_mask_np)
+    paint_mask_init = utils.get_mask_source(args['paint_mask'], car_mask_tensor.size(), paint_mask_np, args["vehicle"])
     paint_mask_tensor = utils.get_mask_target(args['paint_mask'], car_mask_tensor.size(), paint_mask_init)
 
     # 1*3*320*1024

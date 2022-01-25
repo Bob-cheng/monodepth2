@@ -177,28 +177,61 @@ def compute_lap(path_img):
     Ms = torch.sparse_coo_tensor(indices, values, shape, device=torch.device('cuda'))
     return Ms
 
-def make_square_mask(mask_size, boarders):
+def make_square_mask(mask_size, boarders, soft=True):
     """
     boarders: 0: left, 1: right, 2: top, 3: bottom
     mask_size: 0: channel, 1: height, 2: width
     """
-    x = torch.arange(0, mask_size[1])
-    y = torch.arange(0, mask_size[2])
-    grid_x, grid_y = torch.meshgrid(x, y)
-    grid_x.requires_grad = False
-    grid_y.requires_grad = False
-    grid_x = grid_x.to(config.device0)
-    grid_y = grid_y.to(config.device0)
-    l, r, t, b = boarders[0], boarders[1], boarders[2], boarders[3]
-    mask = 0.25 * (-torch.tanh(grid_x-t) * torch.tanh(grid_x-b) + 1) * (-torch.tanh(grid_y-l) * torch.tanh(grid_y-r) + 1)
-    mask = mask.clamp(0, 1).unsqueeze(0)
+    if soft:
+        x = torch.arange(0, mask_size[1])
+        y = torch.arange(0, mask_size[2])
+        grid_x, grid_y = torch.meshgrid(x, y)
+        grid_x.requires_grad = False
+        grid_y.requires_grad = False
+        grid_x = grid_x.to(config.device0)
+        grid_y = grid_y.to(config.device0)
+        l, r, t, b = boarders[0], boarders[1], boarders[2], boarders[3]
+        mask = 0.25 * (-torch.tanh(grid_x-t) * torch.tanh(grid_x-b) + 1) * (-torch.tanh(grid_y-l) * torch.tanh(grid_y-r) + 1)
+        mask = mask.clamp(0, 1).unsqueeze(0)
+    else:
+        mask = torch.zeros((mask_size[1], mask_size[2]))
+        if boarders[2] < 0 or boarders[3] > mask_size[1] or boarders[0] < 0 or boarders[1] > mask_size[2]:
+            mask = None
+        else:
+            l, r, t, b = int(boarders[0].item()), int(boarders[1].item()), int(boarders[2].item()), int(boarders[3].item())
+            mask[t:b, l:r] = 1
+            mask = mask.unsqueeze(0).to(config.device0)
     return mask
 
-def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray):
+def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray, obj_type):
     if mask_type == '-2':
         paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]-40]).float().to(config.device0).requires_grad_(True)
     elif mask_type == '-3':
-        paint_mask_init = torch.tensor([[0, full_size[2], 0, full_size[1]//2], [0, full_size[2], full_size[1]//2, full_size[1]]]).float().to(config.device0).requires_grad_(True)
+        # 2 * 1
+        # paint_mask_init = torch.tensor([[0, full_size[2], 0, full_size[1]//2], [0, full_size[2], full_size[1]//2, full_size[1]]]).float().to(config.device0).requires_grad_(True)
+        grid_layout = [2, 2]
+        W, H = full_size[2], full_size[1]
+        W_stride, H_stride = W // grid_layout[1], H // grid_layout[0]
+        mask_list = []
+        for i in range(grid_layout[0]):
+            for j in range(grid_layout[1]):
+                l = j * W_stride
+                r = l + W_stride
+                t = i * H_stride
+                b = t + H_stride
+                mask_list.append([l, r, t, b])
+        paint_mask_init = torch.tensor(mask_list).float().to(config.device0).requires_grad_(True)
+        
+    elif mask_type == "-4":
+        W, H = full_size[2], full_size[1]
+        if "BMW" in obj_type:
+            paint_mask_init = torch.tensor([W // 3, W // 3 * 2, H // 3, H // 3 * 2]).float().to(config.device0).requires_grad_(True)
+        elif "Pedestrain" in obj_type:
+            paint_mask_init = torch.tensor([0, W, H // 3, H // 3 * 2]).float().to(config.device0).requires_grad_(True)
+        elif "TrafficBarrier" in obj_type:
+            paint_mask_init = torch.tensor([W // 3, W // 3 * 2, 0, H // 2]).float().to(config.device0).requires_grad_(True)
+        else:
+            raise NotImplementedError("obj type not implemented")
     elif mask_type == '-1':
         paint_mask_np_inf = np.arctanh((paint_mask_np - 0.5) * (2 - 1e-7))
         paint_mask_init = torch.from_numpy(paint_mask_np_inf).unsqueeze(0).float().to(config.device0).requires_grad_(True)
@@ -214,6 +247,8 @@ def   get_mask_target(mask_type, full_size, mask_source: torch.Tensor):
         paint_mask1 = make_square_mask(full_size, mask_source[1])
         paint_mask = paint_mask0 + paint_mask1
         paint_mask.clamp_(0, 1)
+    elif mask_type == '-4':
+        paint_mask = make_square_mask(full_size, mask_source, soft=False)
     elif mask_type == '-1':
         paint_mask = from_inf_to_mask(mask_source, full_size)
     else:

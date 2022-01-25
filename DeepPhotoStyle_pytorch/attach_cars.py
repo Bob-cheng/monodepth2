@@ -3,7 +3,7 @@ from torchvision.transforms import transforms
 import random
 import config
 
-def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
+def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask, object_name):
     """
     Attach the car image and adversarial car image to the given scene with fixed position. 
     The scene could have multiple images (batch size > 1)
@@ -20,7 +20,12 @@ def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
     B_Sce, _, H_Sce, W_Sce = adv_scene.size()
     
     for idx_Bat in range(B_Sce):
-        scale = 0.7 # 600 -- 0.4, 300 -- 0.7
+        if object_name == "BMW.png" or object_name == "TrafficBarrier2.png":
+            scale = 0.4 # 600 -- 0.4, 300 -- 0.7
+        elif object_name == 'Pedestrain2.png':
+            scale = 0.14
+        else:
+            raise NotImplementedError("object_name unseen")
         # Do some transformation on the adv_car_img together with car_mask
         trans_seq = transforms.Compose([ 
             transforms.Resize([int(H * scale), int(W * scale)])
@@ -40,8 +45,8 @@ def attach_car_to_scene_fixed(scene_img, adv_car_img, car_img, car_mask):
         left_range = W_Sce - W_Car
         bottom_range = int((H_Sce - H_Car)/2)
         bottom_height = int(bottom_range - scale * max(bottom_range - 10, 0))  # random.randint(min(10, bottom_range), bottom_range) # 20 
-        # left = left_range // 2
-        left = random.randint(50, left_range-50)
+        left = left_range // 2
+        # left = random.randint(50, left_range-50)
 
         h_index = H_Sce - H_Car - bottom_height
         w_index = left

@@ -1,3 +1,8 @@
+import torch
+import utils
+# from model import get_adv_loss
+import config
+
 
 class MaskWeightUpdater():
     def __init__(self, initweight, maskloss_thresh, init_ratio, total_steps, upscaler=1.5,  downscaler=0.7, interval=20) -> None:
@@ -64,3 +69,74 @@ class MaskWeightUpdater():
 
     def get_mask_weight(self):
         return self.mask_weight
+
+def get_mask_ratio(paint_mask,mask, mk_init=None):
+    # mapped_mask = 0.5 * torch.tanh(20 * paint_mask - 2) + 0.5
+    # loss = torch.sum(torch.abs(mapped_mask))
+    # mapped_mask = paint_mask
+    # loss = torch.mean(torch.abs(mapped_mask))
+    if mk_init == None:
+        ratio = torch.sum(paint_mask)/torch.sum(mask)
+    elif len(mk_init.size()) == 1:
+        ratio = (mk_init[1] - mk_init[0]) * (mk_init[3] - mk_init[2]) / torch.sum(mask)
+    return ratio
+
+def mask_loss_fucntion(size,threshold,mask_weight):
+    # loss=torch.exp(torch.abs(size-threshold))*mask_weight
+    # loss=torch.tanh(abs(size-threshold))*mask_weight # not good
+    # loss=torch.sqrt(abs(size-threshold))*mask_weight # good
+    # loss=torch.abs(size-threshold/2)*mask_weight # not good
+    loss=torch.abs(size-threshold)*mask_weight # okay
+    return loss
+
+MASK_INIT_EDGES_SUM = None
+def mask_loss_fucntion2(mk_init, car_mask, mask_weight):
+    # this loss function can avoid influence of rectangular shape making each edge have same weight
+    # which is required in single edge optimization each time
+    global MASK_INIT_EDGES_SUM
+    C, H, W = car_mask.size()
+    loss = 0
+    if len(mk_init.size()) == 1:
+        loss= (torch.abs(mk_init[1] - mk_init[0]) + torch.abs(mk_init[3] - mk_init[2])) / (H + W) * mask_weight
+    elif len(mk_init.size()) == 2: # require the mask to be horizontal
+        num_masks = mk_init.size()[0]
+        for i in range(num_masks):
+            loss += (torch.abs(mk_init[i][1] - mk_init[i][0]) + torch.abs(mk_init[i][3] - mk_init[i][2]))
+        if MASK_INIT_EDGES_SUM == None:
+            MASK_INIT_EDGES_SUM = loss
+        loss = loss / MASK_INIT_EDGES_SUM * mask_weight
+    return loss
+
+
+def edge_based_update(paint_mask_init, mask_optimizer, run):
+    if len(paint_mask_init.size()) == 1:
+        mask_grads = paint_mask_init.grad.clone().detach()
+        mask_grads[0] = - mask_grads[0]
+        mask_grads[2] = - mask_grads[2]
+        optim_idxs = []
+        optim_idxs.append(torch.max(mask_grads, dim=0)[1].item()) ## for one edge training
+        # optim_idxs.extend([0,1,2,3]) ## for 4 edge training
+        if run[0] % 20 == 0:
+            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        paint_mask_init_old = paint_mask_init.clone()
+        mask_optimizer.step()
+        with torch.no_grad():
+            for pm_idx in range(4):
+                if pm_idx not in optim_idxs:
+                    paint_mask_init[pm_idx] = paint_mask_init_old[pm_idx]
+    else:
+        num_masks = paint_mask_init.size()[0]
+        optim_idxs = []
+        mask_grads = paint_mask_init.grad.clone().detach()
+        mask_grads[:, 0] = - mask_grads[:, 0]
+        mask_grads[:, 2] = - mask_grads[:, 2]
+        optim_idxs = torch.max(mask_grads, dim=1)[1].unsqueeze(1)
+        if run[0] % 20 == 0:
+            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        paint_mask_init_old = paint_mask_init.clone()
+        mask_optimizer.step()
+        with torch.no_grad():
+            for mk_idx in range(num_masks):
+                for pm_idx in range(4):
+                    if pm_idx not in optim_idxs[mk_idx]:
+                        paint_mask_init[mk_idx][pm_idx] = paint_mask_init_old[mk_idx][pm_idx]
