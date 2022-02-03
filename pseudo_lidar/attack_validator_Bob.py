@@ -514,7 +514,8 @@ class AttackValidator():
             scale_upper = 0.5
             scale_lower = 0.4
             # scale = (scale_upper - scale_lower) * torch.rand(1) + scale_lower
-            scale=0.37 if self.carname != 'p2' else 0.13
+            # scale=0.37 if self.carname != 'p2' else 0.13
+            scale=0.42 if self.carname != 'p2' else 0.13
             # Do some transformation on the adv_car_img together with car_mask
             trans_seq = transforms.Compose([ 
                 # transforms.RandomRotation(degrees=3),
@@ -572,37 +573,16 @@ def cal_mean_depth_error(disp1, disp2, scene_car_mask):
         (torch.sum(scene_car_mask)+1)
     return mean_depth_diff
 
-
-if __name__ == '__main__':
-    generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
-    save_path = '/data/cheng443/depth_atk'
-    setup_seed(18)
-    car_name = 'BMW'
-    # adv_no = 'style_lambda1'
-    # adv_no = 'cloud_comp'
-    adv_no = 'Mono_1_9_Rob'
-    # adv_no = '102'
-    
-    model='monodepth2'
-    depth_model = import_depth_model((1024, 320), model).to(torch.device("cuda")).eval()
-    # create_pseudo_lidar_dataset(7481, depth_model, 'training', 'velodyne_pseudoSparse04', sparse=0.4) # 7481 from training
-    # exit(0)
-    scene_name='000027'
-    
-    ## process folder data
-    # lidar_dir = '/data/cheng443/depth_atk/videos/09-30-2021/IMG_3596_Processed/Lidar'
-    # validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
-    # all_frames = compose_vis_from_dir(lidar_dir, validator.pipeline, frame_idx=None)
-    # visulize_data(all_frames)
-    # exit(0)
-
-    ## process defence data
-    validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
+def eval_depth_defence(validator):
     ben_disp1,adv_disp2,scene_car_mask = validator.get_depth_data(is_sparse=True)
+    ben_error = cal_mean_depth_error(ben_disp1, ben_disp1, scene_car_mask)
+    atk_error = cal_mean_depth_error(ben_disp1, adv_disp2, scene_car_mask)
+    print(f"Original, benign error: {ben_error}, attack error: {atk_error}")
     # defence_args = {
     #     "type": "bitdepth",
     #     "depth": 1
     # }
+
     # for q in range(10, 91, 10):
     #     defence_args = {
     #         "type": "jpeg_compress",
@@ -613,15 +593,15 @@ if __name__ == '__main__':
     #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
     #     print(f"level: {q}, benign error: {ben_error}, attack error: {atk_error}")
     
-    # for k in range(1, 36, 2):
-    #     defence_args = {
-    #         "type": "smooth",
-    #         "size":k
-    #     }
-    #     ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
-    #     ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
-    #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
-    #     print(f"level: {k}, benign error: {ben_error}, attack error: {atk_error}")
+    for k in range(1, 36, 2):
+        defence_args = {
+            "type": "smooth",
+            "size":k
+        }
+        ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+        ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+        atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+        print(f"level: {k}, benign error: {ben_error}, attack error: {atk_error}")
     
     # for k in [0.1, 0.05, 0.02, 0.01]:
     #     defence_args = {
@@ -633,16 +613,95 @@ if __name__ == '__main__':
     #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
     #     print(f"level: {k}, benign error: {ben_error}, attack error: {atk_error}")
 
-    for model_type in ['param1', 'mnist', 'cifar',  'param2']:
-        defence_args = {
-            "type": "autoencoder",
-            "model_type": model_type
-        }
-        ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
-        ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
-        atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
-        print(f"level: {model_type}, benign error: {ben_error}, attack error: {atk_error}")
+    # for model_type in ['param1', 'mnist', 'cifar',  'param2']:
+    #     defence_args = {
+    #         "type": "autoencoder",
+    #         "model_type": model_type
+    #     }
+    #     ben_disp1_def,adv_disp2_def,scene_car_mask = validator.get_depth_data(is_sparse=True, defence_args=defence_args)
+    #     ben_error = cal_mean_depth_error(ben_disp1, ben_disp1_def, scene_car_mask)
+    #     atk_error = cal_mean_depth_error(ben_disp1, adv_disp2_def, scene_car_mask)
+    #     print(f"level: {model_type}, benign error: {ben_error}, attack error: {atk_error}")
 
+def get_cdf_data(car_name, adv_no):
+    validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72)
+    ben_disp1,adv_disp2,scene_car_mask = validator.get_depth_data(is_sparse=True)
+    scaler = 5.4
+    dep1 = torch.clamp(disp_to_depth(torch.abs(torch.tensor(ben_disp1)), 0.1, 100)[
+                        1]*scene_car_mask.unsqueeze(0).cpu()*scaler, max=100)
+    dep2 = torch.clamp(disp_to_depth(torch.abs(torch.tensor(adv_disp2)), 0.1, 100)[
+                        1]*scene_car_mask.unsqueeze(0).cpu()*scaler, max=100)
+    depth_diff = torch.abs(dep1-dep2).numpy().flatten()
+    x_data = np.sort(depth_diff[depth_diff != 0])
+    N = len(x_data)
+    y_data = np.arange(N) / float(N)
+
+    # getting data of the histogram
+    count, bins_count = np.histogram(x_data, bins=500)
+    
+    # finding the PDF of the histogram using count values
+    y_pdf = count / sum(count)
+    x_pdf = bins_count[1:]
+
+    return x_data, y_data, x_pdf, y_pdf
+
+if __name__ == '__main__':
+    generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
+    save_path = '/data/cheng443/depth_atk'
+    setup_seed(18)
+    car_name = 'BMW'
+    # adv_no = 'style_lambda1'
+    # adv_no = 'cloud_comp'
+    # adv_no = 'noise_style'
+    # adv_no = 'car_style'
+    # adv_no = 'Mono_1_9_Rob'
+    adv_no = '102'
+    
+    model='monodepth2'
+    depth_model = import_depth_model((1024, 320), model).to(torch.device("cuda")).eval()
+    # create_pseudo_lidar_dataset(7481, depth_model, 'training', 'velodyne_pseudoSparse04', sparse=0.4) # 7481 from training
+    # exit(0)
+    scene_name='000027'
+    
+    ## process and visualize folder data
+    # lidar_dir = '/data/cheng443/depth_atk/videos/09-30-2021/IMG_3596_Processed/Lidar'
+    # validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) # 210 is good
+    # all_frames = compose_vis_from_dir(lidar_dir, validator.pipeline, frame_idx=None)
+    # visulize_data(all_frames)
+    # exit(0)
+
+    ## process defence data
+    # validator = AttackValidator(generated_root_path, save_path, car_name, adv_no, scene_name, depth_model, scene_dataset=True, scene_index=72) 
+    # eval_depth_defence(validator)
+
+    # ## draw error cdf
+    compare_adv_no = ['101', '102']
+    x_data1, y_data1, x_pdf1, y_pdf1 = get_cdf_data(car_name, compare_adv_no[0])
+    x_data2, y_data2, x_pdf2, y_pdf2= get_cdf_data(car_name, compare_adv_no[1])
+
+    plt.rcParams['font.size'] = '20'
+    fig, ax1 = plt.subplots(figsize=(6,4))
+    plt.xlabel('Depth Estimation Error (m)')
+    ax1.plot(x_data1, y_data1)
+    ax1.plot(x_data2, y_data2)
+    ax1.legend(['Baseline', 'Ours'], loc='center right')
+    ax1.grid(color = 'grey', linestyle = '--', linewidth = 0.5)
+    ax1.set_ylabel("CDF")
+    plt.xlim([0, 40])
+
+    ax2 = ax1.twinx()
+    plt.rcParams['font.size'] = '20'
+    ax2.hist(x_data1, 200, alpha=.5, density=True)
+    ax2.hist(x_data2, 200, alpha=.5, density=True)
+    ax2.set_ylabel("Frequency")
+    plt.ylim([0, 0.3])
+    plt.savefig("error_pdf_cdf.png", bbox_inches='tight')
+
+
+
+
+
+    
     
 
 

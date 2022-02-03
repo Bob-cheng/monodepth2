@@ -203,13 +203,14 @@ def make_square_mask(mask_size, boarders, soft=True):
             mask = mask.unsqueeze(0).to(config.device0)
     return mask
 
-def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray, obj_type):
+def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray, args):
+    obj_type = args["vehicle"]
     if mask_type == '-2':
         paint_mask_init = torch.tensor([0, full_size[2], 0, full_size[1]-40]).float().to(config.device0).requires_grad_(True)
     elif mask_type == '-3':
         # 2 * 1
         # paint_mask_init = torch.tensor([[0, full_size[2], 0, full_size[1]//2], [0, full_size[2], full_size[1]//2, full_size[1]]]).float().to(config.device0).requires_grad_(True)
-        grid_layout = [2, 2]
+        grid_layout = [1, 1]
         W, H = full_size[2], full_size[1]
         W_stride, H_stride = W // grid_layout[1], H // grid_layout[0]
         mask_list = []
@@ -220,7 +221,10 @@ def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray, obj_type):
                 t = i * H_stride
                 b = t + H_stride
                 mask_list.append([l, r, t, b])
+        # multiple overall patch
+        # mask_list = [[0, W-10, 0, H-50], [10, W, 10, H-40]]
         paint_mask_init = torch.tensor(mask_list).float().to(config.device0).requires_grad_(True)
+        args['mask_weight'] = args['mask_weight'] / (grid_layout[0] * grid_layout[1])
         
     elif mask_type == "-4":
         W, H = full_size[2], full_size[1]
@@ -243,9 +247,10 @@ def   get_mask_target(mask_type, full_size, mask_source: torch.Tensor):
     if mask_type == '-2':
         paint_mask = make_square_mask(full_size, mask_source)
     elif mask_type == '-3':
-        paint_mask0 = make_square_mask(full_size, mask_source[0])
-        paint_mask1 = make_square_mask(full_size, mask_source[1])
-        paint_mask = paint_mask0 + paint_mask1
+        paint_mask_list = []
+        for mk_part in mask_source:
+            paint_mask_list.append(make_square_mask(full_size, mk_part))
+        paint_mask = torch.stack(paint_mask_list, dim=0).sum(dim=0)
         paint_mask.clamp_(0, 1)
     elif mask_type == '-4':
         paint_mask = make_square_mask(full_size, mask_source, soft=False)

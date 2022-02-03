@@ -418,7 +418,7 @@ if __name__ == '__main__':
     generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
     save_path = '/data/cheng443/depth_atk'
     car_name = 'BMW'
-    adv_no = 'style_lambda0_1'
+    adv_no = '152'
     scene_name_set = ['000001', '000004', '000009', '000027', '000033', '000034',
                       '000038', '000042', '000051', '000059', '000097', '000127', '0000000090', '000005']
     # scene_name = '0000000090'
@@ -463,7 +463,7 @@ if __name__ == '__main__':
         validator = AttackValidator(generated_root_path, save_path,
                                     car_name, adv_no, scene_name, depth_model, scene_dataset=False)
         # disp1, disp2, scene_car_mask = validator.get_depth_data()
-        disp1, disp2, scene_car_mask, _ = validator.get_depth_data2(0)
+        disp1, disp2, scene_car_mask, _ = validator.get_depth_data2(10)
         scaler = 5.4
         dep1 = torch.clamp(disp_to_depth(torch.abs(torch.tensor(disp1)), 0.1, 100)[
                            1]*scene_car_mask.unsqueeze(0).cpu()*scaler, max=100)

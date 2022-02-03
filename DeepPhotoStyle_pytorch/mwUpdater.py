@@ -103,7 +103,7 @@ def mask_loss_fucntion2(mk_init, car_mask, mask_weight):
         for i in range(num_masks):
             loss += (torch.abs(mk_init[i][1] - mk_init[i][0]) + torch.abs(mk_init[i][3] - mk_init[i][2]))
         if MASK_INIT_EDGES_SUM == None:
-            MASK_INIT_EDGES_SUM = loss
+            MASK_INIT_EDGES_SUM = loss.item()
         loss = loss / MASK_INIT_EDGES_SUM * mask_weight
     return loss
 
@@ -111,13 +111,14 @@ def mask_loss_fucntion2(mk_init, car_mask, mask_weight):
 def edge_based_update(paint_mask_init, mask_optimizer, run):
     if len(paint_mask_init.size()) == 1:
         mask_grads = paint_mask_init.grad.clone().detach()
-        mask_grads[0] = - mask_grads[0]
-        mask_grads[2] = - mask_grads[2]
+        # mask_grads[0] = - mask_grads[0]
+        # mask_grads[2] = - mask_grads[2]
+        mask_grads = torch.abs(mask_grads)
         optim_idxs = []
         optim_idxs.append(torch.max(mask_grads, dim=0)[1].item()) ## for one edge training
         # optim_idxs.extend([0,1,2,3]) ## for 4 edge training
-        if run[0] % 20 == 0:
-            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        # if run[0] % 20 == 0:
+        #     print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
         paint_mask_init_old = paint_mask_init.clone()
         mask_optimizer.step()
         with torch.no_grad():
@@ -128,11 +129,12 @@ def edge_based_update(paint_mask_init, mask_optimizer, run):
         num_masks = paint_mask_init.size()[0]
         optim_idxs = []
         mask_grads = paint_mask_init.grad.clone().detach()
-        mask_grads[:, 0] = - mask_grads[:, 0]
-        mask_grads[:, 2] = - mask_grads[:, 2]
+        # mask_grads[:, 0] = - mask_grads[:, 0]
+        # mask_grads[:, 2] = - mask_grads[:, 2]
+        mask_grads = torch.abs(mask_grads)
         optim_idxs = torch.max(mask_grads, dim=1)[1].unsqueeze(1)
-        if run[0] % 20 == 0:
-            print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
+        # if run[0] % 20 == 0:
+        #     print("paint mask grad: ", paint_mask_init.grad, " max index", optim_idxs)
         paint_mask_init_old = paint_mask_init.clone()
         mask_optimizer.step()
         with torch.no_grad():
