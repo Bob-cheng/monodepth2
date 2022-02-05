@@ -210,7 +210,7 @@ def get_mask_source(mask_type, full_size, paint_mask_np: np.ndarray, args):
     elif mask_type == '-3':
         # 2 * 1
         # paint_mask_init = torch.tensor([[0, full_size[2], 0, full_size[1]//2], [0, full_size[2], full_size[1]//2, full_size[1]]]).float().to(config.device0).requires_grad_(True)
-        grid_layout = [1, 1]
+        grid_layout = [5, 5]
         W, H = full_size[2], full_size[1]
         W_stride, H_stride = W // grid_layout[1], H // grid_layout[0]
         mask_list = []

@@ -748,6 +748,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
 
                 if run[0] % 200 == 0 or run[0] == 1:
+                # if run[0] % 50 == 0 or run[0] == 1:
                     texture_img = utils.texture_to_car_size(input_img.data.clone(), car_img.size())
                     # add mask and evluate
                     saved_img = texture_img * paint_mask.unsqueeze(0) + car_img * (1-paint_mask.unsqueeze(0))
@@ -783,7 +784,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
 
                     print('Mean of depth difference: {} '.format(mean_depth_diff))
                     logger.add_scalar('Train/Mean_depth_diff', mean_depth_diff, run[0])
-                    
+                    # if run[0] % 200 == 0 or run[0] == 1:
                     logger.add_image('Train/Compare', utils.image_to_tensor(result_img), run[0])
                     logger.add_image('Train/Car_scene', car_scene_out[0], run[0])
                     logger.add_image('Train/Adv_scene', adv_scene_out[0], run[0])
