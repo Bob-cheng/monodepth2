@@ -1,41 +1,68 @@
-# DeepPhotoStyle_pytorch[(中文说明)](README_ZH.md)
-Recreating paper ["Deep Photo Style Transfer"](https://arxiv.org/abs/1703.07511) with pytorch.
-This project supply semantic segmentation code.
-## Here are some experiment results
-![](./doc_image/ex_001.jpg)
-![](./doc_image/ex_002.png)
-![](./doc_image/ex_003.jpg)
+# Monocular Depth Estimation Attack
+This is the reference PyTorch implementation for "Physical Attack on Monocular Depth Estimation in Autonomous Driving with Optimal Adversarial Patches"
+
 ## Setup
-Install [pytorch](https://pytorch.org/) version 0.4.1 with CUDA
-Python version: python3.6
+### Dependencies
+We recommend use Anaconda to manage the packegs and dependencies. Run the following command to install the required depencencies in a new environment.
+```
+conda install --yes --file requirements.txt
+```
+
+### Dataset
+We use KITTI 3D object detection dataset as our background scene dataset. It can be downloaded [here](http://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d). Then you need to organize the data in the following way. The image split files can be downloaded [here](https://github.com/charlesq34/frustum-pointnets/tree/master/kitti/image_sets).
+```
+KITTI/object/
+    
+    train.txt
+    val.txt
+    test.txt 
+    
+    training/
+        calib/
+        image_2/ #left image
+        image_3/ #right image
+        label_2/
+        velodyne/ 
+
+    testing/
+        calib/
+        image_2/
+        image_3/
+        velodyne/
+```
+
+### Data Preparation
+- Style Image Folder: `./DeepPhotoStyle_pytorch/asset/src_img/style`
+
+  Put style image `XXX.png`, and style mask `XXX_StyleMask.png` inside.
+
+- Content Image Folder: `./DeepPhotoStyle_pytorch/asset/src_img/content`
+
+  Put content image `XXX.png`, and content mask `XXX_ContentMask.png` inside.
+
+- Object Image Folder: `./DeepPhotoStyle_pytorch/asset/src_img/car`
+
+  Put object Image `XXX.png`, object mask `XXX_CarMask.png` and fixed patch regions `XXX_PaintMaskAA.png` (AA is the paint mask number).
+
+
+## Adversarial Optimization
+
+1. specify directory locations in `./DeepPhotoStyle_pytorch/utils.py`:
+```
+kitti_object_path  = '/path/to/kitti/object/'
+project_root       = '/path/to/project/root/'
+log_dir            = '/path/to/logdir'
+```
+
+2. Run the following command to start generating adversatial patch. For explainations of each command line options, see `python my_main.py -h`.
 
 ```
-git clone 
+cd ./DeepPhotoStyle_pytorch
 
-https://github.com/ray075hl/DeepPhotoStyle_pytorch.git
-
-cd DeepPhotoStyle_pytorch
-
-sh download_seg_model.sh 
-
-
-
-
-python main.py --style_image path_style_image --content_image path_content_image
+python my_main.py -s Warnning.png -c Warnning.png -v BMW.png -pm -2 --steps 10000 -lr 0.3689 -cw 1000 -sw 1000000 -at disp -aw 1000000 -tw 0.0001 -bs 6 -mw 1000.0 -dm monodepth2 -rw 10 --random-scene -lp mono_car_Rob_disp --late-start -bl proposed -sl 2 
 ```
-**download_seg_model site may not available. You can download segmentation model** [here](https://drive.google.com/open?id=1kkeWEQyyLPELBDbxNljEWBn4DBEwP1ZZ)  
 
-## Notice
-The semantic segmentation result of image pair(style and content) have a huge impact to the quality of transfered image. Check the segmentation result to see whether the relative semantic of image pair as you expected(for example, sky match sky, person match person etc.) or not.
-
-## Reference
-[1] All the code of semantic segmentation from here [Semantic-segmentation-pytorch](https://github.com/CSAILVision/semantic-segmentation-pytorch). I appreciate this fantastic project greatly.
-
-[2] Base framework of neural style transfer.  [Neural Transfer with PyTorch](https://pytorch.org/tutorials/advanced/neural_style_tutorial.html)
-
-[3] Compute laplacian matirx. [Closed-form-matting
-](https://github.com/MarcoForte/closed-form-matting)
-
-[4] ["Deep Photo Style Transfer"](https://arxiv.org/abs/1703.07511)
-
-[5] Post-processing of photo to photo.[Visual Attribute Transfer through Deep Image Analogy](https://arxiv.org/abs/1705.01088)
+3. check the attack performance with tensorboard
+```
+tensorboard --logdir '/path/to/logdir' --samples_per_plugin images=200
+```

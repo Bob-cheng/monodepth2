@@ -123,7 +123,7 @@ class KittiLoader(Dataset):
         
     """
     
-    def __init__(self, root_dir='/data/cheng443/kitti/object/',
+    def __init__(self, root_dir=utils.kitti_object_path,
                  mode='train', loader=pil_loader, size=(1024, 320), 
                  train_list='vehicle_detection/training.txt', 
                  val_list='vehicle_detection/testing.txt', data_limit:int=-1):
@@ -265,8 +265,7 @@ class KittiLoader(Dataset):
 
 
 if __name__ == "__main__":
-    # seperate_sets('/data/cheng443/kitti/object/', 'trainval.txt')
-    # readPathFiles('/data/cheng443/kitti/object/', 'vehicle_detection/training.txt')
+    
     import config
     kitti_loader_train = KittiLoader(mode='train', train_list='trainval.txt', val_list='val.txt')
     kitti_loader_eval = KittiLoader(mode='val', train_list='trainval.txt', val_list='val.txt')
@@ -275,7 +274,7 @@ if __name__ == "__main__":
     for color, target in train_loader:
         color.to(config.device0)
         target.to(config.device0)
-        utils.save_pic(color[0], 3, '/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/')
+        utils.save_pic(color[0], 3, utils.project_root + 'DeepPhotoStyle_pytorch/')
         print(color.size())
         print(target.size())
         break

@@ -129,7 +129,7 @@ if __name__ == '__main__':
     # Logger
     # log_dir = os.path.join(os.path.abspath(os.getcwd()), 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname())
     # log_dir = os.path.join('/data/cheng443/depth_atk', 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + socket.gethostname() + '_CH')
-    log_dir = os.path.join('/data/cheng443/depth_atk', 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + args['log_postfix'])
+    log_dir = os.path.join(utils.log_dir, 'logs', datetime.datetime.now().strftime('%b%d_%H-%M-%S_') + args['log_postfix'])
     os.makedirs(log_dir)
     logger = SummaryWriter(log_dir)
     logger.add_text('args/CLI_params', str(args), 0)

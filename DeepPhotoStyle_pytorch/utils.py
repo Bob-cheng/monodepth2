@@ -3,11 +3,16 @@ import os
 import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
-from torchvision.transforms.functional import InterpolationMode
+# from torchvision.transforms.functional import InterpolationMode
 from matting import *
 import config
 import scipy.ndimage as spi
 from wls_filter import wls_filter
+
+kitti_object_path = '/data/cheng443/kitti/object/'
+project_root = '/home/cheng443/projects/Monodepth/Monodepth2_official/'
+log_dir = '/data/cheng443/depth_atk'
+
 
 
 def load_image(path, size):
@@ -71,7 +76,7 @@ def from_inf_to_mask(values: torch.Tensor, mask_size):
     epsilon = 1e-7
     # values = transforms.Resize(mask_size[1:3])(values)
     mask = (torch.tanh(values) / (2 - epsilon) + 0.5)
-    mask = transforms.Resize(mask_size[1:3], InterpolationMode.NEAREST)(mask)
+    mask = transforms.Resize(mask_size[1:3], Image.NEAREST)(mask)
     return mask
 
 def extract_patch(adv_car, paint_mask):

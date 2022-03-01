@@ -471,7 +471,7 @@ def vis_input_grad(logger: SummaryWriter,paint_mask,  input_img: torch.Tensor):
     print(input_img_grad_l1.size())
     colormap_im = color_mapping(input_img_grad_l1)
     im = pil.fromarray(colormap_im)
-    im.save('/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/grad_vis.png')
+    im.save(utils.project_root + 'DeepPhotoStyle_pytorch/grad_vis.png')
     # utils.save_pic(input_img_grad_l1, 'grad_vis', '/home/cheng443/projects/Monodepth/Monodepth2_official/DeepPhotoStyle_pytorch/')
     # logger.add_image('Debug/input_grad', input_img_grad_l1[0], 0)
 
@@ -757,7 +757,7 @@ def run_style_transfer(logger: SummaryWriter, cnn, normalization_mean, normaliza
                     if args['l1_norm']:
                         log_perterbation(logger, input_img, car_img, paint_mask, run[0])
 
-                    generated_root_path = "/home/cheng443/projects/Monodepth/Monodepth2_official/pseudo_lidar/figures/GeneratedAtks/"
+                    generated_root_path = utils.project_root + "pseudo_lidar/figures/GeneratedAtks/"
                     scene_name_set = ['000001','000004','000009','000027','000033','000034','000038','000042','000051','000059','000097','000127','0000000090','000005']
                     mean_depth_diff=0
                     for validator_scene_name in scene_name_set:
